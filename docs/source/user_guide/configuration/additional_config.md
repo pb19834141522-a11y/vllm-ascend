@@ -221,6 +221,17 @@ settings; enabling both selects the combined DyntraLB recompute scheduler.
 | `budget_threshold` | float | `0.3` | Cumulative survival-probability threshold used when estimating the mean verify budget. |
 | `min_verify_tokens` | int | `1` | Minimum number of draft tokens verified per request. |
 
+**spec_k_config**
+
+Spec-K uses the draft model's distribution perplexity to select a per-token expert budget for the target MoE model. The policy is fixed for the lifetime of the engine and applies to every request.
+
+| Name | Type | Default | Description |
+| ---- | ---- | ------- | ----------- |
+| `enabled` | bool | `False` | Whether to enable Spec-K. |
+| `ppl_thresholds` | list[float] | `[]` | Finite, positive, non-increasing perplexity thresholds. For a model top-k of `K` and `M < K` thresholds, the minimum expert budget is `K - M`; crossing a threshold adds one expert. Repeated thresholds add multiple experts at the same boundary. |
+| `full_top_k_layer_range` | list[int] | `[0, 0, 1]` | Two- or three-element Python-style slice selecting MoE layers that always use the model's full top-k. |
+| `apply_last_token` | bool | `False` | Use the mean proposal budget, rounded down, for the bonus-token position after the draft sequence. When disabled, that position uses the full model top-k. |
+
 **scheduler_config.short_request_first_config**
 
 ShortRequestFirst is a waiting-queue policy for FCFS synchronous or asynchronous scheduling on prefill and PD-mixed paths. It does not support batch-job-aware, profiling-chunk, or PD-disaggregated D-node scheduling. See [ShortRequestFirst Prefill Scheduling](../feature_guide/short_request_first.md) for usage, behavior, and tuning guidance.

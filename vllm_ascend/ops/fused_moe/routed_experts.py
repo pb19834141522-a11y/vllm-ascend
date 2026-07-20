@@ -192,6 +192,31 @@ def make_eplb_placement_config(eplb_config, num_redundant_experts: int) -> Simpl
     )
 
 
+def _apply_token_top_ks(
+    topk_ids: torch.Tensor,
+    topk_weights: torch.Tensor,
+    invalid_expert_id: int,
+    token_top_ks: torch.Tensor | None,
+) -> None:
+    if token_top_ks is None:
+        return
+    if token_top_ks.ndim != 1:
+        raise ValueError("token_top_ks must be a 1D tensor")
+    if token_top_ks.shape != topk_ids.shape[:-1]:
+        raise ValueError(
+            "token_top_ks shape must match the token dimensions of topk_ids: "
+            f"{token_top_ks.shape} != {topk_ids.shape[:-1]}"
+        )
+
+    route_mask = torch.arange(
+        topk_weights.shape[-1], device=topk_weights.device
+    ) >= token_top_ks.unsqueeze(-1)
+    if topk_ids.dtype == torch.uint32:
+        topk_ids = topk_ids.view(torch.int32)
+    topk_ids.masked_fill_(route_mask, invalid_expert_id)
+    topk_weights.masked_fill_(route_mask, 0.0)
+
+
 class EplbExpertTensorList(list[torch.Tensor]):
     """Per-expert tensors exposed through the upstream EPLB weight contract."""
 
@@ -254,6 +279,19 @@ class AscendRoutedExperts(RoutedExperts):  # type: ignore[no-redef]
         if not self._use_v2_model_runner:
             self.init_eplb(n_shared_experts)
         self.return_with_event = False
+        self._spec_k_full_top_k = False
+
+    def _initialize_spec_k_layer(
+        self, moe_layer_index: int, num_moe_layers: int
+    ) -> None:
+        spec_k_config = get_ascend_config().spec_k_config
+        if not spec_k_config.enabled:
+            return
+
+        full_top_k_range = slice(*spec_k_config.full_top_k_layer_range)
+        self._spec_k_full_top_k = moe_layer_index in range(
+            *full_top_k_range.indices(num_moe_layers)
+        )
 
     def get_expert_weights(self) -> Iterable[torch.Tensor]:
         try:
@@ -441,6 +479,7 @@ class AscendRoutedExperts(RoutedExperts):  # type: ignore[no-redef]
         router_logits: torch.Tensor,
         enable_force_load_balance: bool,
         input_ids: torch.Tensor | None = None,
+        token_top_ks: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         if self.router is None:
             raise RuntimeError("AscendRoutedExperts requires a router for expert selection.")
@@ -460,6 +499,18 @@ class AscendRoutedExperts(RoutedExperts):  # type: ignore[no-redef]
             self.moe_config.num_experts,
             global_redundant_expert_num=self.global_redundant_expert_num,
             num_shared_experts=num_shared_experts,
+        )
+
+        invalid_expert_id = (
+            num_logical_experts + num_shared_experts
+            if getattr(self, "mix_placement", False)
+            else self.moe_config.num_experts
+        )
+        _apply_token_top_ks(
+            topk_ids,
+            topk_weights,
+            invalid_expert_id,
+            token_top_ks,
         )
 
         if getattr(self, "mix_placement", False):
@@ -501,6 +552,14 @@ class AscendRoutedExperts(RoutedExperts):  # type: ignore[no-redef]
         input_ids: torch.Tensor | None = None,
     ):
         forward_context = get_forward_context()
+        token_top_ks = _EXTRA_CTX.token_top_ks
+        if not torch.is_tensor(token_top_ks) or self._spec_k_full_top_k:
+            token_top_ks = None
+        elif token_top_ks.ndim != 1:
+            raise ValueError(
+                "Spec-K token top-k tensor must be 1D, "
+                f"got {token_top_ks.shape}."
+            )
         # When static kernels are enabled, the forward pass runs twice
         # (compilation + capture), causing moe_layer_index to overflow.
         if self.enable_npugraph_ex_static_kernel and forward_context.all_moe_layers:
@@ -517,11 +576,13 @@ class AscendRoutedExperts(RoutedExperts):  # type: ignore[no-redef]
         prepare_output = _EXTRA_CTX.moe_comm_method.prepare(
             hidden_states=hidden_states,
             router_logits=router_logits,
+            token_top_ks=token_top_ks,
             replace_allreduce=_EXTRA_CTX.flash_comm_v1_enabled,
             quant_type=self.quant_type,
         )
         hidden_states = prepare_output.hidden_states
         router_logits = prepare_output.router_logits
+        token_top_ks = prepare_output.token_top_ks
         mc2_mask = prepare_output.mc2_mask
         padded_hidden_states_shape = prepare_output.padded_hidden_states_shape
         pertoken_scale = prepare_output.pertoken_scale
@@ -532,6 +593,7 @@ class AscendRoutedExperts(RoutedExperts):  # type: ignore[no-redef]
             router_logits=router_logits,
             enable_force_load_balance=enable_force_load_balance,
             input_ids=input_ids,
+            token_top_ks=token_top_ks,
         )
         self.ascend_pertoken_scale = pertoken_scale
         self.ascend_mc2_mask = mc2_mask

@@ -28,3 +28,4 @@ class MoEPrepareOutput:
     mc2_mask: torch.Tensor | None
     padded_hidden_states_shape: torch.Size | None
     pertoken_scale: torch.Tensor | None = None
+    token_top_ks: torch.Tensor | None = None

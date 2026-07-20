@@ -90,6 +90,7 @@ class TestMoECommMethod(TestBase):
             router_logits=router_logits,
             replace_allreduce=False,
             quant_type=QuantType.NONE,
+            token_top_ks=None,
         )
 
         # Test finalize method
@@ -136,6 +137,7 @@ class TestMoECommMethod(TestBase):
             router_logits=router_logits,
             replace_allreduce=False,
             quant_type=QuantType.NONE,
+            token_top_ks=None,
         )
 
         # Test finalize method
@@ -180,6 +182,7 @@ class TestMoECommMethod(TestBase):
             router_logits=router_logits,
             replace_allreduce=False,
             quant_type=QuantType.NONE,
+            token_top_ks=None,
         )
 
     @patch("vllm_ascend.ascend_forward_context.get_forward_context")
