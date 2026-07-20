@@ -17,6 +17,7 @@ def reset_mc2_tokens_capacity(monkeypatch):
         lambda: SimpleNamespace(
             enable_prefill_mc2=False,
             enable_fused_mc2=0,
+            spec_k_config=SimpleNamespace(enabled=False),
             expert_offload_config=SimpleNamespace(
                 expert_offload=False,
                 enable_multi_card=False,
@@ -83,6 +84,7 @@ def _patch_select_moe_comm_method_deps(
     ep_world_size: int = 8,
     enable_fused_mc2: int = 0,
     enable_prefill_mc2: int = 0,
+    spec_k_enabled: bool = False,
     is_moe: bool = True,
 ):
     monkeypatch.setattr(afc, "is_moe_model", lambda _: is_moe)
@@ -95,6 +97,7 @@ def _patch_select_moe_comm_method_deps(
         lambda: SimpleNamespace(
             enable_fused_mc2=enable_fused_mc2,
             enable_prefill_mc2=enable_prefill_mc2,
+            spec_k_config=SimpleNamespace(enabled=spec_k_enabled),
             expert_offload_config=SimpleNamespace(
                 expert_offload=False,
                 enable_multi_card=False,

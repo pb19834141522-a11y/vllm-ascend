@@ -456,6 +456,30 @@ class AscendMoERunner(MoERunner):  # type: ignore[no-redef]
                 self._expert_map_offload = _offload_emap
                 self._expert_map_offload_count = _ndev
         self.top_k = moe_config.experts_per_token
+
+        # The source Spec-K implementation stores this flag on the newer
+        # AscendRoutedExperts abstraction.  This offload branch predates that
+        # refactor, so keep the equivalent per-layer state on both the runner
+        # and its routed-expert weight owner.
+        ascend_config = get_ascend_config()
+        self._spec_k_full_top_k = False
+        if ascend_config.spec_k_config.enabled:
+            moe_layer_names = (
+                get_current_vllm_config().compilation_config.static_all_moe_layers
+            )
+            try:
+                moe_layer_index = moe_layer_names.index(layer_name)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Spec-K MoE layer {layer_name!r} was not registered."
+                ) from exc
+            full_top_k_range = slice(
+                *ascend_config.spec_k_config.full_top_k_layer_range
+            )
+            self._spec_k_full_top_k = moe_layer_index in range(
+                *full_top_k_range.indices(len(moe_layer_names))
+            )
+        routed_experts._spec_k_full_top_k = self._spec_k_full_top_k
         self._gate = gate
         self.hidden_size = moe_config.hidden_dim
         self._ascend_runtime_activation = runtime_activation

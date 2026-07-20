@@ -207,7 +207,10 @@ class AscendSpecDecodeBaseProposer(SpecDecodeBaseProposer):
 
         # TODO: Remove it when the bug of fx-graph is solved
         self.maybe_eager_context: AbstractContextManager[Any] = nullcontext()
-        if not self.use_cuda_graph and enable_sp(vllm_config):
+        if not self.use_cuda_graph and (
+            enable_sp(vllm_config)
+            or (get_ascend_config().spec_k_config.enabled and self.speculative_config.enforce_eager)
+        ):
             self.maybe_eager_context = _maybe_eager_context(vllm_config)
 
         self.token_indices_to_sample = torch.zeros(
@@ -1009,8 +1012,31 @@ class AscendSpecDecodeBaseProposer(SpecDecodeBaseProposer):
         num_scheduled_tokens: int = 0,
         num_rejected_tokens_gpu: torch.Tensor | None = None,
         num_draft_tokens_cpu: list[int] | None = None,
-    ) -> torch.Tensor:
+        num_speculative_tokens: int | None = None,
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         batch_size = common_attn_metadata.batch_size()
+
+        # Match vLLM's proposer contract while retaining the offload branch's
+        # extra asynchronous-draft bookkeeping argument.
+        if num_speculative_tokens is not None:
+            self.num_speculative_tokens = num_speculative_tokens
+
+        if self.num_speculative_tokens == 0:
+            empty_ids = torch.empty(
+                batch_size,
+                0,
+                device=target_token_ids.device,
+                dtype=torch.int64,
+            )
+            if get_ascend_config().spec_k_config.enabled:
+                empty_logits = torch.empty(
+                    batch_size,
+                    0,
+                    0,
+                    device=target_token_ids.device,
+                )
+                return empty_ids, empty_logits
+            return empty_ids
 
         if token_indices_to_sample is None:
             token_indices_to_sample = common_attn_metadata.query_start_loc[1:] - 1
@@ -1277,11 +1303,24 @@ class AscendSpecDecodeBaseProposer(SpecDecodeBaseProposer):
 
             if self.enable_enpu:
                 self._update_full_graph_params_if_needed(forward_context, num_input_tokens, multi_steps_attn_metadata)
-                draft_token_ids = run_draft()
+                draft_output = run_draft()
             else:
-                draft_token_ids = run_draft()
+                draft_output = run_draft()
                 self._update_full_graph_params_if_needed(forward_context, num_input_tokens, multi_steps_attn_metadata)
-        return draft_token_ids
+
+        # FULL graph replays at a padded batch size. Do not expose those
+        # padding rows to the target model's rejection sampler.
+        if isinstance(draft_output, tuple):
+            draft_token_ids, draft_token_logits = draft_output
+        else:
+            draft_token_ids = draft_output
+            draft_token_logits = None
+        draft_token_ids = draft_token_ids[:batch_size]
+        if draft_token_logits is not None:
+            draft_token_logits = draft_token_logits[:batch_size]
+        if draft_token_logits is None:
+            return draft_token_ids
+        return draft_token_ids, draft_token_logits
 
     def compute_draft_token_ids(self, hidden_states: torch.Tensor):
         if self.method in ("eagle3", "dflash", "dspark"):
@@ -1308,7 +1347,9 @@ class AscendSpecDecodeBaseProposer(SpecDecodeBaseProposer):
         multi_steps_attn_metadata,
         num_tokens,
         is_prefill=None,
-    ) -> torch.Tensor:
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
+        ascend_config = get_ascend_config()
+        return_draft_logits = ascend_config.spec_k_config.enabled and self.method == "draft_model"
         # The lifecycle of `input_ids`, `positions`, `hidden_states` runs through all
         # speculative tokens' proposings. `model_input_ids`, `model_positions` and
         # `model_hidden_states` represent the speculative model inputs.
@@ -1367,7 +1408,7 @@ class AscendSpecDecodeBaseProposer(SpecDecodeBaseProposer):
 
         sample_hidden_states = last_hidden_states[token_indices_to_sample]
 
-        if get_ascend_config().enable_reduce_sample:
+        if ascend_config.enable_reduce_sample:
             if self.method in ("eagle3", "dflash", "mtp"):
                 draft_token_ids = self.compute_draft_token_ids(sample_hidden_states)
                 if lmhead_tp_enable():
@@ -1445,10 +1486,13 @@ class AscendSpecDecodeBaseProposer(SpecDecodeBaseProposer):
         # Early exit if there is only one draft token to be generated.
         if self.num_speculative_tokens == 1 or self.parallel_drafting:
             if self.method == "dspark":
-                return draft_token_ids[:, 1:]
+                draft_token_ids = draft_token_ids[:, 1:]
             else:
                 # [batch_size, 1]
-                return draft_token_ids.view(-1, self.num_speculative_tokens)
+                draft_token_ids = draft_token_ids.view(-1, self.num_speculative_tokens)
+            if not return_draft_logits:
+                return draft_token_ids
+            return draft_token_ids, logits.view(-1, self.num_speculative_tokens, logits.shape[-1])
 
         # The logits are split and then merged only when lmhead_tp_enable() is enabled.
         # As a result, the batch size length becomes the actual length 32.
@@ -1463,6 +1507,14 @@ class AscendSpecDecodeBaseProposer(SpecDecodeBaseProposer):
             (self.num_speculative_tokens, *draft_token_ids.shape), dtype=draft_token_ids.dtype, device=self.device
         )
         draft_token_ids_tensor[0] = draft_token_ids
+        draft_token_logits_tensor = None
+        if return_draft_logits:
+            draft_token_logits_tensor = torch.empty(
+                (self.num_speculative_tokens, *logits.shape),
+                dtype=logits.dtype,
+                device=logits.device,
+            )
+            draft_token_logits_tensor[0] = logits
         if self.uses_mrope:
             positions = self.mrope_positions[:, token_indices_to_sample]
         else:
@@ -1563,7 +1615,7 @@ class AscendSpecDecodeBaseProposer(SpecDecodeBaseProposer):
                 )
 
             sample_hidden_states = last_hidden_states[token_indices_to_sample]
-            if get_ascend_config().enable_reduce_sample:
+            if ascend_config.enable_reduce_sample:
                 if self.method in ("eagle3", "dflash", "dspark", "mtp"):
                     draft_token_ids = self.compute_draft_token_ids(sample_hidden_states)
                     if lmhead_tp_enable() and num_indices < draft_token_ids.shape[0]:
@@ -1589,10 +1641,15 @@ class AscendSpecDecodeBaseProposer(SpecDecodeBaseProposer):
             # TODO(wenlong): get more than one token for tree attention
             hidden_states = hidden_states[:batch_size]
             draft_token_ids_tensor[draft_index + 1] = draft_token_ids
+            if draft_token_logits_tensor is not None:
+                draft_token_logits_tensor[draft_index + 1] = logits
 
         # [batch_size, num_speculative_tokens]
         draft_token_ids = draft_token_ids_tensor.swapaxes(0, 1)
-        return draft_token_ids
+        if draft_token_logits_tensor is None:
+            return draft_token_ids
+        draft_token_logits = draft_token_logits_tensor.swapaxes(0, 1)
+        return draft_token_ids, draft_token_logits
 
     def set_inputs_first_pass(
         self,
