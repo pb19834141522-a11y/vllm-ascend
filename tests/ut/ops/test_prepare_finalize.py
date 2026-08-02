@@ -43,29 +43,25 @@ class TestPrepareAndFinalize(unittest.TestCase):
 
         hidden_states = torch.randn(3, 8)
         router_logits = torch.randn(3, 2)
+        token_top_ks = torch.tensor([3, 2, 1], dtype=torch.int32)
 
-        prepare_output = layer.prepare(hidden_states, router_logits)
+        prepare_output = layer.prepare(hidden_states, router_logits, token_top_ks=token_top_ks)
         h_out = prepare_output.hidden_states
         r_out = prepare_output.router_logits
         mask = prepare_output.mc2_mask
+        prepared_top_ks = prepare_output.token_top_ks
         padded_hidden_states_shape = prepare_output.padded_hidden_states_shape
 
         # Check padding and split
         self.assertEqual(h_out.shape[0], 4)
         self.assertEqual(r_out.shape[0], 4)
         self.assertEqual(mask.tolist(), [1, 0, 1])
+        self.assertEqual(prepared_top_ks.tolist(), [3, 2, 1, 0])
         self.assertEqual(padded_hidden_states_shape, torch.Size([4, 8]))
 
         # Finalize
         result = layer.finalize(h_out, reduce_results=False, padded_hidden_states_shape=padded_hidden_states_shape)
         self.assertEqual(result.shape[0], 3)
-
-        with self.assertRaisesRegex(ValueError, "requires AllGather"):
-            layer.prepare(
-                hidden_states,
-                router_logits,
-                token_top_ks=torch.ones(3, dtype=torch.int32),
-            )
 
     @patch("vllm_ascend.ops.fused_moe.prepare_finalize.get_tensor_model_parallel_world_size", return_value=2)
     @patch("vllm_ascend.ops.fused_moe.prepare_finalize.get_tensor_model_parallel_rank", return_value=0)
@@ -110,24 +106,20 @@ class TestPrepareAndFinalize(unittest.TestCase):
         layer = PrepareAndFinalizeWithAll2All(self.moe_config)
         hidden_states = torch.randn(3, 8)
         router_logits = torch.randn(3, 2)
+        token_top_ks = torch.tensor([2, 1, 1], dtype=torch.int32)
 
-        prepare_output = layer.prepare(hidden_states, router_logits)
+        prepare_output = layer.prepare(hidden_states, router_logits, token_top_ks=token_top_ks)
         h_out = prepare_output.hidden_states
+        prepared_top_ks = prepare_output.token_top_ks
         padded_hidden_states_shape = prepare_output.padded_hidden_states_shape
 
         # Pad to tp_size=1, so no change
         self.assertEqual(h_out.shape[0], 3)
+        self.assertEqual(prepared_top_ks.tolist(), [2, 1, 1])
         self.assertEqual(padded_hidden_states_shape, torch.Size([3, 8]))
 
         result = layer.finalize(h_out, reduce_results=False, padded_hidden_states_shape=padded_hidden_states_shape)
         self.assertEqual(result.shape[0], 3)
-
-        with self.assertRaisesRegex(ValueError, "requires AllGather"):
-            layer.prepare(
-                hidden_states,
-                router_logits,
-                token_top_ks=torch.ones(3, dtype=torch.int32),
-            )
 
     @patch("vllm_ascend.ops.fused_moe.prepare_finalize.get_tensor_model_parallel_world_size", return_value=2)
     @patch("vllm_ascend.ops.fused_moe.prepare_finalize.get_tensor_model_parallel_rank", return_value=0)

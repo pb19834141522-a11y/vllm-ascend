@@ -259,12 +259,15 @@ def _select_a2_moe_comm_method(
         vllm_config.parallel_config.world_size_across_dp // vllm_config.parallel_config.pipeline_parallel_size
     )
     num_experts_per_device = num_experts // ep_world_size
+    spec_k_enabled = get_ascend_config().spec_k_config.enabled
     if (
         num_experts_per_device <= 24
-        and ep_world_size >= 16
+        and (ep_world_size >= 16 or spec_k_enabled)
         and (num_tokens is None or num_tokens <= mc2_tokens_capacity)
     ):
         return MoECommType.MC2
+    if spec_k_enabled:
+        return MoECommType.ALLTOALL
     return MoECommType.ALLGATHER
 
 
@@ -340,11 +343,7 @@ def select_moe_comm_method(num_tokens: int, vllm_config: VllmConfig) -> MoECommT
     mc2_tokens_capacity = get_mc2_tokens_capacity()
     soc_version = get_ascend_device_type()
     lora_config = getattr(vllm_config, "lora_config", None)
-    if (
-        ascend_config.spec_k_config.enabled
-        or not vllm_config.parallel_config.enable_expert_parallel
-        or get_ep_group().world_size == 1
-    ):
+    if not vllm_config.parallel_config.enable_expert_parallel or get_ep_group().world_size == 1:
         moe_comm_type = MoECommType.ALLGATHER
     elif lora_config is not None and vllm_config.parallel_config.enable_expert_parallel:
         # LoRA + EP requires AlltoAll because the MC2/FusedMC2 paths
@@ -354,6 +353,11 @@ def select_moe_comm_method(num_tokens: int, vllm_config: VllmConfig) -> MoECommT
         moe_comm_type = MoECommType.ALLTOALL
     elif soc_version == AscendDeviceType.A2:
         moe_comm_type = _select_a2_moe_comm_method(num_tokens, vllm_config, mc2_tokens_capacity)
+    elif ascend_config.spec_k_config.enabled and soc_version != AscendDeviceType.A2:
+        # The Spec-K route mask is currently wired through the A2 MC2 and
+        # All2AllV dispatchers. Keep other device generations on AllGather
+        # until their corresponding dispatcher contracts are adapted.
+        moe_comm_type = MoECommType.ALLGATHER
     elif soc_version == AscendDeviceType.A3:
         moe_comm_type = _select_a3_moe_comm_method(
             num_tokens,

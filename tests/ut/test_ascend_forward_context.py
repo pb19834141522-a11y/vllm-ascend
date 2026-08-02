@@ -212,10 +212,14 @@ def test_select_moe_comm_method_uses_allgather_without_effective_expert_parallel
 
 
 @pytest.mark.parametrize(
-    "device_type",
-    [afc.AscendDeviceType.A2, afc.AscendDeviceType.A3, afc.AscendDeviceType.A5],
+    ("device_type", "expected"),
+    [
+        (afc.AscendDeviceType.A2, MoECommType.MC2),
+        (afc.AscendDeviceType.A3, MoECommType.ALLGATHER),
+        (afc.AscendDeviceType.A5, MoECommType.ALLGATHER),
+    ],
 )
-def test_select_moe_comm_method_uses_allgather_for_spec_k(monkeypatch, device_type):
+def test_select_moe_comm_method_keeps_spec_k_dispatch_scoped_to_a2(monkeypatch, device_type, expected):
     _patch_select_moe_comm_method_deps(
         monkeypatch,
         device_type=device_type,
@@ -225,7 +229,27 @@ def test_select_moe_comm_method_uses_allgather_for_spec_k(monkeypatch, device_ty
     )
 
     vllm_config = _make_vllm_config(world_size=16)
-    assert afc.select_moe_comm_method(16, vllm_config) == MoECommType.ALLGATHER
+    assert afc.select_moe_comm_method(16, vllm_config) == expected
+
+
+@pytest.mark.parametrize(
+    ("num_tokens", "expected"),
+    [
+        (128, MoECommType.MC2),
+        (129, MoECommType.ALLTOALL),
+    ],
+)
+def test_select_moe_comm_method_a2_spec_k_uses_all2allv_over_mc2_capacity(monkeypatch, num_tokens, expected):
+    _patch_select_moe_comm_method_deps(
+        monkeypatch,
+        device_type=afc.AscendDeviceType.A2,
+        capacity=128,
+        ep_world_size=8,
+        spec_k_enabled=True,
+    )
+    vllm_config = _make_vllm_config(world_size=8, num_experts=128)
+
+    assert afc.select_moe_comm_method(num_tokens, vllm_config) == expected
 
 
 @pytest.mark.parametrize(

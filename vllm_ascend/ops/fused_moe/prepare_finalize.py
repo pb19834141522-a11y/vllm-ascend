@@ -144,10 +144,6 @@ class PrepareAndFinalizeWithAll2All(PrepareAndFinalize):
         Returns:
             MoEPrepareOutput where `mc2_mask` is None for All2All path.
         """
-        if token_top_ks is not None:
-            raise ValueError(
-                "Per-token top-k routing requires AllGather MoE communication."
-            )
         self.replace_allreduce = replace_allreduce
 
         padded_hidden_states_shape = hidden_states.shape
@@ -166,6 +162,8 @@ class PrepareAndFinalizeWithAll2All(PrepareAndFinalize):
             if pad_size > 0:
                 hidden_states = nn.functional.pad(hidden_states, (0, 0, 0, pad_size))
                 router_logits = nn.functional.pad(router_logits, (0, 0, 0, pad_size))
+                if token_top_ks is not None:
+                    token_top_ks = nn.functional.pad(token_top_ks, (0, pad_size))
                 padded_hidden_states_shape = hidden_states.shape
 
             if self.tp_size > 1:
@@ -174,6 +172,8 @@ class PrepareAndFinalizeWithAll2All(PrepareAndFinalize):
 
                 hidden_states = split_hidden_states[self.tp_rank]
                 router_logits = split_router_logits[self.tp_rank]
+                if token_top_ks is not None:
+                    token_top_ks = torch.tensor_split(token_top_ks, self.tp_size, dim=0)[self.tp_rank]
 
         return MoEPrepareOutput(
             hidden_states=hidden_states,
@@ -181,8 +181,8 @@ class PrepareAndFinalizeWithAll2All(PrepareAndFinalize):
             mc2_mask=None,
             padded_hidden_states_shape=padded_hidden_states_shape,
             pertoken_scale=None,
+            token_top_ks=token_top_ks,
         )
-
     def pad_and_split_input_ids(
         self,
         input_ids,
@@ -273,10 +273,6 @@ class PrepareAndFinalizeWithMC2(PrepareAndFinalizeWithAll2All):
         Returns:
             MoEPrepareOutput, possibly sliced/padded.
         """
-        if token_top_ks is not None:
-            raise ValueError(
-                "Per-token top-k routing requires AllGather MoE communication."
-            )
         self.replace_allreduce = replace_allreduce
         mc2_mask = _EXTRA_CTX.mc2_mask
         if self.tp_size > 1:
@@ -293,6 +289,8 @@ class PrepareAndFinalizeWithMC2(PrepareAndFinalizeWithAll2All):
             if pad_size > 0:
                 hidden_states = nn.functional.pad(hidden_states, (0, 0, 0, pad_size))
                 router_logits = nn.functional.pad(router_logits, (0, 0, 0, pad_size))
+                if token_top_ks is not None:
+                    token_top_ks = nn.functional.pad(token_top_ks, (0, pad_size))
                 padded_hidden_states_shape = hidden_states.shape
 
             # Slice across TP ranks
@@ -301,6 +299,8 @@ class PrepareAndFinalizeWithMC2(PrepareAndFinalizeWithAll2All):
                 split_router_logits = torch.tensor_split(router_logits, self.tp_size, dim=0)
                 hidden_states = split_hidden_states[self.tp_rank]
                 router_logits = split_router_logits[self.tp_rank]
+                if token_top_ks is not None:
+                    token_top_ks = torch.tensor_split(token_top_ks, self.tp_size, dim=0)[self.tp_rank]
 
         return MoEPrepareOutput(
             hidden_states=hidden_states,
@@ -308,6 +308,7 @@ class PrepareAndFinalizeWithMC2(PrepareAndFinalizeWithAll2All):
             mc2_mask=mc2_mask,
             padded_hidden_states_shape=padded_hidden_states_shape,
             pertoken_scale=None,
+            token_top_ks=token_top_ks,
         )
 
     def pad_and_split_input_ids(

@@ -142,11 +142,14 @@ class TokenDispatcherWithMC2(MoETokenDispatcher[MoEMC2CombineMetadata]):
         self.max_num_tokens_per_rank = num_tokens_per_tp_rank
         _max_global_bs = num_tokens_per_tp_rank * self.ep_world_size
 
-        # When allreduce across DP is not skipped, tokens are uniform across ranks:
-        # use global_bs=0 (uniform mode) and pass mc2_mask.
-        # When allreduce is skipped, tokens may differ per rank:
-        # use the real global_bs and do NOT pass mc2_mask.
-        self.global_bs = _max_global_bs if should_skip_allreduce_across_dp_group(vllm_config) else 0
+        # Spec-K needs the route-level x_active_mask, which is only available
+        # in MC2's non-zero-global_bs mode. Preserve the existing uniform mode
+        # for non-Spec-K forwards unless DP all-reduce is skipped.
+        spec_k_enabled = getattr(getattr(get_ascend_config(), "spec_k_config", None), "enabled", False)
+        self.spec_k_enabled = spec_k_enabled is True
+        self.global_bs = (
+            _max_global_bs if self.spec_k_enabled or should_skip_allreduce_across_dp_group(vllm_config) else 0
+        )
 
         # NOTE: When enable_mc2_hierarchy_comm is true, we need pass in `comm_alg` to mc2 op.
         self.need_comm_alg = get_ascend_config().enable_mc2_hierarchy_comm
@@ -197,6 +200,8 @@ class TokenDispatcherWithMC2(MoETokenDispatcher[MoEMC2CombineMetadata]):
         }
         if self.global_bs == 0:
             kwargs_mc2["x_active_mask"] = token_dispatch_input.routing.mc2_mask
+        elif self.spec_k_enabled:
+            kwargs_mc2["x_active_mask"] = (topk_ids >= 0) & (topk_ids < self.moe_expert_num)
 
         stage1_kwargs = {
             "scales": None,
@@ -275,6 +280,7 @@ class TokenDispatcherWithMC2(MoETokenDispatcher[MoEMC2CombineMetadata]):
                 expand_scales=expand_scales,
                 quant=token_dispatch_input.quant,
                 mc2_mask=token_dispatch_input.routing.mc2_mask if self.global_bs == 0 else None,
+                x_active_mask=kwargs_mc2.get("x_active_mask"),
             ),
         )
 
@@ -309,6 +315,8 @@ class TokenDispatcherWithMC2(MoETokenDispatcher[MoEMC2CombineMetadata]):
         }
         if self.global_bs == 0:
             kwargs_mc2["x_active_mask"] = combine_metadata.mc2_mask
+        elif self.spec_k_enabled:
+            kwargs_mc2["x_active_mask"] = combine_metadata.x_active_mask
 
         if combine_metadata.quant.dispatch_with_quant:
             tp_recv_counts = torch.empty(1, dtype=torch.int32, device=hidden_states.device)
@@ -617,6 +625,11 @@ class TokenDispatcherWithAll2AllV(MoETokenDispatcher[MoEAllToAllCombineMetadata]
             num_out_tokens=num_out_tokens,
         )
 
+        # Invalid routes are sorted after valid experts by the permute op.
+        # Exclude them from communication while retaining the reverse mapping.
+        local_total_tokens = int(input_splits.sum())
+        permutated_local_input_tokens = permutated_local_input_tokens[:local_total_tokens]
+
         if self.lora_context is not None:
             preprocess_lora_indices(
                 self.lora_context,
@@ -636,7 +649,12 @@ class TokenDispatcherWithAll2AllV(MoETokenDispatcher[MoEAllToAllCombineMetadata]
         )
 
     def _preprocess(self, topk_ids: torch.Tensor):
-        num_local_tokens_per_expert = torch.histc(topk_ids, bins=self.num_experts, min=0, max=self.num_experts)
+        num_local_tokens_per_expert = torch.histc(
+            topk_ids,
+            bins=self.num_experts,
+            min=0,
+            max=self.num_experts - 1,
+        )
 
         ep_size = self.ep_size
         num_out_tokens = topk_ids.numel()

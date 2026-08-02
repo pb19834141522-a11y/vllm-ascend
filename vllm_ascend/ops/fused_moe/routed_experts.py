@@ -552,7 +552,7 @@ class AscendRoutedExperts(RoutedExperts):  # type: ignore[no-redef]
         input_ids: torch.Tensor | None = None,
     ):
         forward_context = get_forward_context()
-        token_top_ks = _EXTRA_CTX.token_top_ks
+        token_top_ks = getattr(_EXTRA_CTX, "token_top_ks", None)
         if not torch.is_tensor(token_top_ks) or self._spec_k_full_top_k:
             token_top_ks = None
         elif token_top_ks.ndim != 1:
@@ -582,7 +582,7 @@ class AscendRoutedExperts(RoutedExperts):  # type: ignore[no-redef]
         )
         hidden_states = prepare_output.hidden_states
         router_logits = prepare_output.router_logits
-        token_top_ks = prepare_output.token_top_ks
+        token_top_ks = getattr(prepare_output, "token_top_ks", None)
         mc2_mask = prepare_output.mc2_mask
         padded_hidden_states_shape = prepare_output.padded_hidden_states_shape
         pertoken_scale = prepare_output.pertoken_scale
