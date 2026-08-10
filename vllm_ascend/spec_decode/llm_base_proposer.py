@@ -1092,7 +1092,10 @@ class AscendSpecDecodeBaseProposer(SpecDecodeBaseProposer):
         is_prefill=None,
     ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         ascend_config = get_ascend_config()
-        return_draft_logits = ascend_config.spec_k_config.enabled and self.method == "draft_model"
+        return_draft_logits = (
+            ascend_config.spec_k_config.enabled is True
+            and ascend_config.spec_k_config.supports_draft_logits(self.method)
+        )
         # The lifecycle of `input_ids`, `positions`, `hidden_states` runs through all
         # speculative tokens' proposings. `model_input_ids`, `model_positions` and
         # `model_hidden_states` represent the speculative model inputs.
@@ -1152,7 +1155,7 @@ class AscendSpecDecodeBaseProposer(SpecDecodeBaseProposer):
         sample_hidden_states = last_hidden_states[token_indices_to_sample]
 
         if ascend_config.enable_reduce_sample:
-            if self.method in ("eagle3", "dflash", "mtp"):
+            if self.method in ("eagle3", "dflash", "mtp") and not return_draft_logits:
                 draft_token_ids = self.compute_draft_token_ids(sample_hidden_states)
                 if lmhead_tp_enable():
                     draft_token_ids, token_indices_to_sample = self._align_tensor_and_indices(
@@ -1167,7 +1170,7 @@ class AscendSpecDecodeBaseProposer(SpecDecodeBaseProposer):
                 if lmhead_tp_enable():
                     # Defensive: mutually exclusive with enable_reduce_sample at startup (ascend_config.py).
                     logits = lmhead_all_to_all(logits, get_lmhead_tp_group())
-                else:
+                elif not return_draft_logits:
                     logits = self.model.model.logits_processor._gather_logits(logits)
                 if lmhead_tp_enable():
                     logits, token_indices_to_sample = self._align_tensor_and_indices(
@@ -1360,7 +1363,7 @@ class AscendSpecDecodeBaseProposer(SpecDecodeBaseProposer):
 
             sample_hidden_states = last_hidden_states[token_indices_to_sample]
             if ascend_config.enable_reduce_sample:
-                if self.method in ("eagle3", "dflash", "dspark", "mtp"):
+                if self.method in ("eagle3", "dflash", "dspark", "mtp") and not return_draft_logits:
                     draft_token_ids = self.compute_draft_token_ids(sample_hidden_states)
                     if lmhead_tp_enable() and num_indices < draft_token_ids.shape[0]:
                         draft_token_ids = draft_token_ids[:num_indices]
@@ -1370,7 +1373,7 @@ class AscendSpecDecodeBaseProposer(SpecDecodeBaseProposer):
                     if lmhead_tp_enable():
                         # Defensive: mutually exclusive with enable_reduce_sample at startup (ascend_config.py).
                         logits = lmhead_all_to_all(logits, get_lmhead_tp_group())
-                    else:
+                    elif not return_draft_logits:
                         logits = self.model.model.logits_processor._gather_logits(logits)
                     if lmhead_tp_enable() and num_indices < logits.shape[0]:
                         logits = logits[:num_indices]

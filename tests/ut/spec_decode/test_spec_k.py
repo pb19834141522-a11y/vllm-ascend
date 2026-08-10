@@ -21,6 +21,7 @@ def _vllm_config(
     quantization: str | None = None,
 ):
     speculative_config = SimpleNamespace(
+        method=method,
         uses_draft_model=lambda: method == "draft_model",
         enforce_eager=True,
     )
@@ -94,11 +95,21 @@ def test_spec_k_config_rejects_invalid_thresholds(config, match):
 
 
 def test_spec_k_config_rejects_other_speculative_methods():
-    with pytest.raises(ValueError, match="method='draft_model'"):
+    with pytest.raises(ValueError, match="draft logits"):
         SpecKConfig(
             {"enabled": True, "ppl_thresholds": [2.0]},
             _vllm_config(method="ngram"),
         )
+
+
+@pytest.mark.parametrize("method", ["draft_model", "eagle", "eagle3", "mtp", "dflash"])
+def test_spec_k_config_accepts_draft_logit_methods(method):
+    config = SpecKConfig(
+        {"enabled": True, "ppl_thresholds": [2.0]},
+        _vllm_config(method=method),
+    )
+
+    assert config.enabled
 
 
 def test_spec_k_config_rejects_non_eager_draft_proposer():

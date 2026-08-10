@@ -236,6 +236,7 @@ class TestAscendConfig(TestBase):
         test_vllm_config.scheduler_config.async_scheduling = False
         test_vllm_config.cache_config.enable_prefix_caching = False
         test_vllm_config.speculative_config = SimpleNamespace(
+            method="draft_model",
             uses_draft_model=lambda: True,
             use_eagle=lambda: False,
             use_step3p5_mtp=lambda: False,

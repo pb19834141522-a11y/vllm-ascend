@@ -594,6 +594,8 @@ class DynamicSpecConfig:
 class SpecKConfig:
     """Engine-global configuration for Spec-K dynamic expert routing."""
 
+    _DRAFT_LOGIT_METHODS = frozenset(("draft_model", "eagle", "eagle3", "mtp", "dflash"))
+
     _VALID_KEYS = {
         "enabled",
         "ppl_thresholds",
@@ -680,8 +682,13 @@ class SpecKConfig:
         if vllm_config.speculative_config is None:
             raise ValueError("Spec-K requires speculative decoding to be enabled.")
         speculative_config = vllm_config.speculative_config
-        if not speculative_config.uses_draft_model():
-            raise ValueError("Spec-K requires speculative method='draft_model'.")
+        method = speculative_config.method
+        if not self.supports_draft_logits(method):
+            supported_methods = ", ".join(sorted(self._DRAFT_LOGIT_METHODS))
+            raise ValueError(
+                "Spec-K requires a speculative method that provides draft logits; "
+                f"supported methods are: {supported_methods}."
+            )
         if not speculative_config.enforce_eager:
             raise ValueError(
                 "Spec-K requires the draft proposer to set enforce_eager=true."
@@ -708,6 +715,9 @@ class SpecKConfig:
             "Spec-K is enabled with engine-global perplexity thresholds %s.",
             self.ppl_thresholds,
         )
+
+    def supports_draft_logits(self, method: str | None) -> bool:
+        return method in self._DRAFT_LOGIT_METHODS
 
 
 class FinegrainedTPConfig:

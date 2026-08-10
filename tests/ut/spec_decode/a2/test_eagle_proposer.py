@@ -2707,40 +2707,53 @@ class TestRunMergedDraft(TestBase):
         )
         self.assertEqual(draft_token_ids.tolist(), [[151667], [32313]])
 
-    def test_run_merged_draft_returns_logits_for_draft_model_spec_k(self):
-        self.proposer.method = "draft_model"
-        self.proposer.num_speculative_tokens = 1
-        self.proposer.pass_hidden_states_to_model = False
-        self.proposer.model = MockDraftModel(returns_tuple=False, vocab_size=32)
-        self.proposer.input_ids[:2] = torch.tensor([5, 7], dtype=torch.int32)
-
-        mock_ascend_config = MagicMock()
-        mock_ascend_config.enable_reduce_sample = False
-        mock_ascend_config.spec_k_config.enabled = True
-        with (
-            patch.object(llm_base_proposer, "lmhead_tp_enable", return_value=False),
-            patch.object(
-                llm_base_proposer,
-                "get_ascend_config",
-                return_value=mock_ascend_config,
-            ),
-        ):
-            draft_token_ids, draft_token_logits = self.proposer._run_merged_draft(
-                num_input_tokens=2,
-                batch_size=2,
-                token_indices_to_sample=torch.tensor([0, 1], dtype=torch.int64),
-                target_positions=torch.tensor([0, 0], dtype=torch.int64),
-                inputs_embeds=None,
-                multi_steps_attn_metadata=None,
-                num_tokens=2,
-                is_prefill=False,
+    def test_run_merged_draft_returns_logits_for_spec_k_methods(self):
+        for method in ("draft_model", "eagle", "eagle3", "mtp", "dflash"):
+            self.proposer.method = method
+            self.proposer.num_speculative_tokens = 3
+            self.proposer.pass_hidden_states_to_model = False
+            self.proposer.model = MockDraftModel(
+                returns_tuple=method in ("eagle", "eagle3"),
+                vocab_size=32,
             )
+            if method != "dflash":
+                self.proposer.model.model = MagicMock()
+                self.proposer.model.model.logits_processor._gather_logits.side_effect = lambda logits: logits
+            self.proposer.input_ids[:2] = torch.tensor([5, 7], dtype=torch.int32)
+            if method == "dflash":
+                self.proposer._context_slot_mapping_buffers = MagicMock()
+                self.proposer.build_model_inputs_first_pass = MagicMock()
 
-        self.assertEqual(draft_token_ids.tolist(), [[5], [7]])
-        self.assertEqual(draft_token_logits.shape, (2, 1, 32))
-        self.assertTrue(
-            torch.equal(draft_token_ids, draft_token_logits.argmax(dim=-1))
-        )
+            mock_ascend_config = MagicMock()
+            mock_ascend_config.enable_reduce_sample = True
+            mock_ascend_config.spec_k_config.enabled = True
+            forward_context = MagicMock()
+            forward_context.moe_layer_index = 0
+            with (
+                patch.object(llm_base_proposer, "lmhead_tp_enable", return_value=False),
+                patch.object(
+                    llm_base_proposer,
+                    "get_ascend_config",
+                    return_value=mock_ascend_config,
+                ),
+                patch.object(llm_base_proposer, "get_forward_context", return_value=forward_context),
+            ):
+                draft_token_ids, draft_token_logits = self.proposer._run_merged_draft(
+                    num_input_tokens=2,
+                    batch_size=2,
+                    token_indices_to_sample=torch.tensor([0, 1], dtype=torch.int64),
+                    target_positions=torch.tensor([0, 0], dtype=torch.int64),
+                    inputs_embeds=None,
+                    multi_steps_attn_metadata=None,
+                    num_tokens=2,
+                    is_prefill=False,
+                )
+
+            self.assertEqual(draft_token_ids.tolist(), [[5, 6, 8], [7, 8, 10]])
+            self.assertEqual(draft_token_logits.shape, (2, 3, 32))
+            self.assertTrue(
+                torch.equal(draft_token_ids, draft_token_logits.argmax(dim=-1))
+            )
 
     def test_run_merged_draft_mtp_mrope_graph_and_lmhead_tp_preparation(self):
         self.proposer.method = "mtp"

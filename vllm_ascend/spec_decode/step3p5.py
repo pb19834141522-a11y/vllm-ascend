@@ -183,20 +183,23 @@ class AscendStep3p5MTPProposer(AscendEagleProposer):
         sampling_metadata: SamplingMetadata,
         spec_step_idx: int,
         num_indices: int,
-    ) -> tuple[torch.Tensor, torch.Tensor | None]:
+    ) -> tuple[torch.Tensor, torch.Tensor | None, torch.Tensor | None]:
         """GPU Step3.5 sampling semantics with Ascend TP/reduce-sample paths."""
         logits: torch.Tensor | None = None
+        spec_k_enabled = get_ascend_config().spec_k_config.enabled is True
         if get_ascend_config().enable_reduce_sample and self.method == "mtp":
             if not hasattr(self.model.model, "compute_logits"):
+                if spec_k_enabled:
+                    raise RuntimeError("Spec-K requires draft logits from the Step3.5 MTP proposer.")
                 draft_token_ids = self.compute_draft_token_ids(hidden_states)
                 if lmhead_tp_enable() and num_indices < draft_token_ids.shape[0]:
                     draft_token_ids = draft_token_ids[:num_indices]
-                return draft_token_ids, None
+                return draft_token_ids, None, None
             logits = self.model.compute_logits(hidden_states, spec_step_idx=spec_step_idx)
             if lmhead_tp_enable():
                 # Defensive: mutually exclusive with enable_reduce_sample at startup (ascend_config.py).
                 logits = lmhead_all_to_all(logits, get_lmhead_tp_group())
-            else:
+            elif not spec_k_enabled:
                 logits = self.model.model.logits_processor._gather_logits(logits)
         else:
             logits = self.model.compute_logits(hidden_states, spec_step_idx=spec_step_idx)
@@ -204,8 +207,10 @@ class AscendStep3p5MTPProposer(AscendEagleProposer):
         if lmhead_tp_enable() and num_indices < logits.shape[0]:
             logits = logits[:num_indices]
         if not self._enable_probabilistic_draft_probs or sampling_metadata.all_greedy:
-            return logits.argmax(dim=-1), None
-        return compute_probs_and_sample_next_token(logits, sampling_metadata)
+            draft_token_ids = logits.argmax(dim=-1)
+            return draft_token_ids, None, logits if spec_k_enabled else None
+        draft_token_ids, draft_probs = compute_probs_and_sample_next_token(logits, sampling_metadata)
+        return draft_token_ids, draft_probs, logits if spec_k_enabled else None
 
     @torch.inference_mode()
     def dummy_run(
@@ -516,9 +521,10 @@ class AscendStep3p5MTPProposer(AscendEagleProposer):
         multi_steps_attn_metadata,
         num_tokens,
         is_prefill=None,
-    ) -> torch.Tensor:
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         """Base MTP execution flow with Step3.5 step-aware layer/head selection."""
         self._last_draft_probs = None
+        spec_k_enabled = get_ascend_config().spec_k_config.enabled is True
         sampling_metadata = self.runner.input_batch.sampling_metadata
         model_input_ids = self.input_ids[:num_input_tokens]
         model_positions = self._get_positions(num_input_tokens)
@@ -555,7 +561,7 @@ class AscendStep3p5MTPProposer(AscendEagleProposer):
             )
 
         sample_hidden_states = last_hidden_states[token_indices_to_sample]
-        draft_token_ids, draft_probs = self._sample_draft_tokens_for_step(
+        draft_token_ids, draft_probs, draft_logits = self._sample_draft_tokens_for_step(
             sample_hidden_states,
             sampling_metadata,
             spec_step_idx=0,
@@ -566,11 +572,17 @@ class AscendStep3p5MTPProposer(AscendEagleProposer):
                 self._last_draft_probs = draft_probs.view(
                     -1, self.num_speculative_tokens, draft_probs.shape[-1]
                 ).contiguous()
-            return draft_token_ids.view(-1, self.num_speculative_tokens)
+            draft_token_ids = draft_token_ids.view(-1, self.num_speculative_tokens)
+            if not spec_k_enabled:
+                return draft_token_ids
+            if draft_logits is None:
+                raise RuntimeError("Spec-K requires draft logits from the Step3.5 MTP proposer.")
+            return draft_token_ids, draft_logits.view(-1, self.num_speculative_tokens, draft_logits.shape[-1])
 
         return self._run_window_draft_steps(
             first_draft_token_ids=draft_token_ids,
             first_draft_probs=draft_probs,
+            first_draft_logits=draft_logits,
             first_hidden_states=hidden_states,
             num_input_tokens=num_input_tokens,
             batch_size=batch_size,
@@ -606,6 +618,7 @@ class AscendStep3p5MTPProposer(AscendEagleProposer):
         *,
         first_draft_token_ids: torch.Tensor,
         first_draft_probs: torch.Tensor | None,
+        first_draft_logits: torch.Tensor | None,
         first_hidden_states: torch.Tensor,
         num_input_tokens: int,
         batch_size: int,
@@ -615,7 +628,7 @@ class AscendStep3p5MTPProposer(AscendEagleProposer):
         multi_steps_attn_metadata,
         inputs_embeds,
         sampling_metadata: SamplingMetadata,
-    ) -> torch.Tensor:
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         """Run the Step3.5 MTP full-window layer chain.
 
         This is the canonical Step3.5 MTP draft path, matching the full-window
@@ -627,6 +640,7 @@ class AscendStep3p5MTPProposer(AscendEagleProposer):
         token_indices_to_sample.
         """
         draft_probs_list = None if first_draft_probs is None else [first_draft_probs]
+        draft_logits_list = None if first_draft_logits is None else [first_draft_logits]
         draft_token_ids_list = [first_draft_token_ids]
         full_hidden_states = first_hidden_states[:num_tokens]
         input_batch_size = num_input_tokens
@@ -688,7 +702,7 @@ class AscendStep3p5MTPProposer(AscendEagleProposer):
 
             num_indices = token_indices_to_sample.shape[0]
             sample_hidden_states = last_hidden_states[token_indices_to_sample]
-            draft_token_ids, draft_probs = self._sample_draft_tokens_for_step(
+            draft_token_ids, draft_probs, draft_logits = self._sample_draft_tokens_for_step(
                 sample_hidden_states,
                 sampling_metadata,
                 spec_step_idx=spec_step_idx,
@@ -697,13 +711,20 @@ class AscendStep3p5MTPProposer(AscendEagleProposer):
             if draft_probs is not None:
                 assert draft_probs_list is not None
                 draft_probs_list.append(draft_probs)
+            if draft_logits is not None:
+                assert draft_logits_list is not None
+                draft_logits_list.append(draft_logits)
             full_hidden_states = hidden_states[:num_tokens]
             draft_token_ids_list.append(draft_token_ids)
 
         draft_token_ids = torch.stack(draft_token_ids_list, dim=1)
         if draft_probs_list is not None:
             self._last_draft_probs = torch.stack(draft_probs_list, dim=1).contiguous()
-        return draft_token_ids
+        if get_ascend_config().spec_k_config.enabled is not True:
+            return draft_token_ids
+        if draft_logits_list is None:
+            raise RuntimeError("Spec-K requires draft logits from the Step3.5 MTP proposer.")
+        return draft_token_ids, torch.stack(draft_logits_list, dim=1).contiguous()
 
     # -- overrides matching the GPU Step3p5MTPProposer ----------------------
 
