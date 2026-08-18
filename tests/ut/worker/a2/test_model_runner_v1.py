@@ -816,6 +816,50 @@ class TestNPUModelRunnerOutputTokenIds(unittest.TestCase):
         self.assertIsNone(req1_state.pending_draft_top_ks)
         self.assertFalse(runner._spec_k_history_updates)
 
+    def test_take_draft_token_ids_trims_spec_k_history_with_dynamic_lengths(self):
+        runner = self._build_runner()
+        runner._spec_k_enabled = True
+        runner._spec_k_policy = SimpleNamespace(base_top_k=8)
+        runner._spec_k_request_states = {}
+        runner._spec_k_history_updates = {}
+        runner._spec_k_draft_top_ks_cpu = torch.tensor(
+            [
+                [5, 4, 3, 2],
+                [7, 6, 5, 4],
+            ],
+            dtype=torch.int32,
+        )
+        runner.num_spec_tokens = 3
+        runner.drafter = SimpleNamespace(
+            dynamic_spec=SimpleNamespace(
+                num_verify_tokens=torch.tensor([1, 3], dtype=torch.int32)
+            )
+        )
+        draft_token_ids = DraftTokenIds(
+            req_ids=["req0", "req1"],
+            draft_token_ids=[
+                [101, 102, 103],
+                [201, 202, 203],
+            ],
+        )
+
+        with patch(
+            "vllm.v1.worker.gpu_model_runner.GPUModelRunner.take_draft_token_ids",
+            return_value=draft_token_ids,
+        ):
+            result = runner.take_draft_token_ids()
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.draft_token_ids, [[101], [201, 202, 203]])
+        self.assertEqual(
+            runner._spec_k_request_states["req0"].pending_draft_top_ks.tolist(),
+            [5, 2],
+        )
+        self.assertEqual(
+            runner._spec_k_request_states["req1"].pending_draft_top_ks.tolist(),
+            [7, 6, 5, 4],
+        )
+
 
 class TestNPUModelRunnerDebugger(unittest.TestCase):
     def _build_runner(self, debugger=None):

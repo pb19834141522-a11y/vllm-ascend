@@ -1960,6 +1960,11 @@ class NPUModelRunner(GPUModelRunner):
 
     def take_draft_token_ids(self) -> DraftTokenIds | None:
         out = super().take_draft_token_ids()
+        draft_widths = (
+            [len(token_ids) for token_ids in out.draft_token_ids]
+            if self._spec_k_enabled and out is not None
+            else []
+        )
         if out is not None:
             dynamic_spec = getattr(
                 getattr(self, "drafter", None), "dynamic_spec", None
@@ -1995,9 +2000,16 @@ class NPUModelRunner(GPUModelRunner):
             for row, (req_id, token_ids) in enumerate(
                 zip(out.req_ids, out.draft_token_ids)
             ):
+                draft_width = draft_widths[row]
+                draft_top_ks = torch.cat(
+                    (
+                        draft_top_ks_cpu[row, : len(token_ids)],
+                        draft_top_ks_cpu[row, draft_width : draft_width + 1],
+                    )
+                )
                 self._finalize_spec_k_step(
                     req_id,
-                    draft_top_ks_cpu[row, : len(token_ids) + 1],
+                    draft_top_ks,
                 )
                 finalized_req_ids.add(req_id)
 
