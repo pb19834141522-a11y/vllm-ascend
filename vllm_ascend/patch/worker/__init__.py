@@ -24,6 +24,9 @@ if HAS_TRITON:
     import vllm_ascend.patch.worker.patch_v2.patch_triton  # noqa
 
 
+# Apply the MoE factory patch before any worker patch imports a model module.
+import vllm_ascend.patch.worker.patch_fused_moe  # noqa
+
 import vllm_ascend.patch.worker.patch_process_weights_after_loading  # noqa
 import vllm_ascend.patch.worker.patch_distributed  # noqa
 import vllm_ascend.patch.worker.patch_minimax_m2  # noqa
@@ -57,8 +60,6 @@ import vllm_ascend.patch.worker.patch_deepseek_v2  # noqa
 # We always patch it so that on Ascend the v2 runner is enabled only
 # when the env var is explicitly set.
 import vllm_ascend.patch.worker.patch_v2.patch_use_v2_model_runner  # noqa
-
-import vllm_ascend.patch.worker.patch_fused_moe  # noqa
 
 import vllm_ascend.patch.worker.patch_v2.patch_uva  # noqa
 import vllm_ascend.patch.worker.patch_v2.patch_input_batch  # noqa

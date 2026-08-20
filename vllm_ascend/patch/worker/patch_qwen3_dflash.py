@@ -12,6 +12,9 @@ def precompute_and_store_context_kv(
     context_positions: torch.Tensor,
     context_slot_mapping: torch.Tensor | None = None,
 ) -> None:
+    if context_positions.dtype is not torch.int64:
+        context_positions = context_positions.to(dtype=torch.int64)
+
     if not hasattr(self, "_num_attn_layers"):
         self._build_fused_kv_buffers()
 
@@ -67,6 +70,22 @@ def precompute_and_store_context_kv(
 
 
 DFlashQwen3Model.precompute_and_store_context_kv = precompute_and_store_context_kv
+
+_orig_dflash_model_forward = DFlashQwen3Model.forward
+
+
+def _patched_dflash_model_forward(
+    self,
+    input_ids: torch.Tensor,
+    positions: torch.Tensor,
+    input_embeds: torch.Tensor | None = None,
+) -> torch.Tensor:
+    if positions.dtype is not torch.int64:
+        positions = positions.to(dtype=torch.int64)
+    return _orig_dflash_model_forward(self, input_ids, positions, input_embeds)
+
+
+DFlashQwen3Model.forward = _patched_dflash_model_forward
 
 _orig_read_mask_embedding = DFlashQwen3ForCausalLM._read_mask_embedding
 

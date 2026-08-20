@@ -652,7 +652,8 @@
 #    How：
 #       Reuse the platform patch (`platform/patch_fused_moe.py`) so the monkey
 #       patch lives in a single module and is applied idempotently during worker
-#       initialization.
+#       initialization. Load this patch before worker patches that import model
+#       modules so their module-local factory bindings use AscendMoERunner.
 #    Related PR (if no, explain why):
 #       No, see platform/patch_fused_moe.py.
 #    Future Plan:
@@ -852,12 +853,15 @@
 #
 # ** 15. File: worker/patch_qwen3_dflash.py**
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#   1. `vllm.model_executor.models.qwen3_dflash.DFlashQwen3Model.precompute_and_store_context_kv`
+#   1. `vllm.model_executor.models.qwen3_dflash.DFlashQwen3Model`
+#      `precompute_and_store_context_kv`, `forward`
 #    Why:
 #       The function directly calls the ops.rms_norm and ops.rotary_imbedding operators,
-#       but NPU does not have a corresponding implementation.
+#       but NPU does not have a corresponding implementation. The NPU rotary
+#       embedding operator also requires positions to use int64.
 #    How：
-#       Replace ops.* with the internal implementation of vllm-ascend.
+#       Replace ops.* with the internal implementation of vllm-ascend and
+#       normalize positions to int64 in both context precompute and forward.
 #    Future Plan:
 #       Remove this patch when vllm-ascend supports pattern matching for ops.*.
 #
