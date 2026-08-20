@@ -223,7 +223,7 @@ settings; enabling both selects the combined DyntraLB recompute scheduler.
 
 **spec_k_config**
 
-Spec-K uses the draft model's distribution perplexity to select a per-token expert budget for the target MoE model. The policy is fixed for the lifetime of the engine and applies to every request.
+Spec-K uses the draft model's distribution perplexity to select a per-token expert budget for the target MoE model. The policy is fixed for the lifetime of the engine and applies to every request. Supported speculative methods are `draft_model`, `eagle`, `eagle3`, `mtp`, and `dflash`; the selected proposer must provide draft logits and set `enforce_eager` to `true`.
 
 | Name | Type | Default | Description |
 | ---- | ---- | ------- | ----------- |

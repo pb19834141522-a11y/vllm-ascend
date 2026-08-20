@@ -67,7 +67,7 @@ vllm serve path/to/target/model \
 
 Spec-K uses the draft model's output-distribution perplexity to choose how many routed experts the target MoE model evaluates for each speculative token. Confident draft predictions use fewer experts, while uncertain predictions retain more of the target model's configured top-k. This policy changes target-model computation and can affect output quality, so thresholds should be calibrated and evaluated for each target/draft pair.
 
-Spec-K is an engine-global policy configured through `additional_config.spec_k_config`; it cannot be changed per request. It requires an unquantized MoE target and speculative decoding with `method` set to `draft_model`. The draft proposer must run eagerly by setting `enforce_eager` to `true`; this does not prevent the target model from using ACL graph mode. The current implementation supports the V1 runner with synchronous scheduling, pipeline parallel size 1, prefix caching and EPLB disabled, and no PCP or DCP. DP, TP, and expert parallelism use the AllGather MoE communication path; All2All, MC2, and FusedMC2 are not supported. 310P is not supported.
+Spec-K is an engine-global policy configured through `additional_config.spec_k_config`; it cannot be changed per request. It requires an unquantized MoE target and a speculative method that provides draft logits: `draft_model`, `eagle`, `eagle3`, `mtp`, or `dflash`. The draft proposer must run eagerly by setting `enforce_eager` to `true`; this does not prevent the target model from using ACL graph mode. The current implementation supports the V1 runner with synchronous scheduling, pipeline parallel size 1, prefix caching and EPLB disabled, and no PCP or DCP. DP, TP, and expert parallelism are supported. On A2 with expert parallelism, routing uses MC2 when its normal selection predicates and token capacity allow, then falls back to All2AllV; other device generations use AllGather for Spec-K. FusedMC2 and 310P are not supported.
 
 For a target model whose normal expert top-k is `K`, providing `M < K` non-increasing thresholds gives a minimum budget of `K - M`. Each threshold crossed by the draft perplexity adds one expert. For example, a top-k 8 model with five thresholds varies between 3 and 8 experts.
 
@@ -85,6 +85,8 @@ For a target model whose normal expert top-k is `K`, providing `M < K` non-incre
     ```
 
 The optional `full_top_k_layer_range` is a Python-style slice of MoE layer indices that must always use full top-k. `apply_last_token` applies the mean proposal budget, rounded down, to the bonus-token position after the draft sequence instead of full top-k.
+
+Spec-K can be combined with DFlash confidence-based dynamic speculative decoding. `dynamic_spec_config` selects how many draft tokens are verified, while `spec_k_config` independently selects the target MoE expert budget for those tokens.
 
 ## Speculating by matching n-grams in the prompt
 
