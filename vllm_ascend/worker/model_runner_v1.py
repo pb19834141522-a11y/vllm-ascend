@@ -356,6 +356,13 @@ class NPUModelRunner(GPUModelRunner):
         self._spec_k_draft_top_ks_cpu: torch.Tensor | None = None
         self._spec_k_input_top_ks: CpuGpuBuffer | None = None
         self._spec_k_draft_top_ks: torch.Tensor | None = None
+        # Accuracy-run telemetry. Counters are process-local and cumulative;
+        # the evaluator takes a before/after window and aggregates DP ranks.
+        self._spec_k_finished_top_k_sum = 0
+        self._spec_k_finished_token_count = 0
+        self._spec_k_finished_request_count = 0
+        self._spec_k_target_top_k_sum = 0
+        self._spec_k_target_token_count = 0
 
         # Dump / PrecisionDebugger configuration now comes from AscendConfig
         dump_cfg = self.ascend_config.dump_config_path
@@ -811,6 +818,10 @@ class NPUModelRunner(GPUModelRunner):
                 )
             )
             offset = end
+        # Count every token row actually submitted to the target. This is the
+        # Target Avg Top-K compute scope, including rejected draft positions.
+        self._spec_k_target_top_k_sum += int(output.sum().item())
+        self._spec_k_target_token_count += total_num_scheduled_tokens
         self._spec_k_input_top_ks.copy_to_gpu(total_num_scheduled_tokens)
 
     def _stage_spec_k_history_updates(
@@ -955,8 +966,42 @@ class NPUModelRunner(GPUModelRunner):
         deferred_corrections = super()._update_states(scheduler_output)
         if self._spec_k_enabled:
             for req_id in scheduler_output.finished_req_ids:
-                self._spec_k_request_states.pop(req_id, None)
+                state = self._spec_k_request_states.pop(req_id, None)
+                if state is not None and state.output_top_ks.numel() > 0:
+                    self._spec_k_finished_top_k_sum += int(
+                        state.output_top_ks.sum().item()
+                    )
+                    self._spec_k_finished_token_count += state.output_top_ks.numel()
+                    self._spec_k_finished_request_count += 1
                 self._spec_k_history_updates.pop(req_id, None)
+            policy = self._spec_k_policy
+            if (
+                scheduler_output.finished_req_ids
+                and self._spec_k_finished_token_count
+                and self._spec_k_target_token_count
+                and policy is not None
+                and get_tp_group().rank_in_group == 0
+            ):
+                logger.info(
+                    "Spec-K benchmark metrics: average output top-k=%.6f, "
+                    "output tokens=%d, average target top-k=%.6f, "
+                    "target tokens=%d, theoretical routed-FFN reduction=%.2f%%, "
+                    "finished requests=%d",
+                    self._spec_k_finished_top_k_sum
+                    / self._spec_k_finished_token_count,
+                    self._spec_k_finished_token_count,
+                    self._spec_k_target_top_k_sum
+                    / self._spec_k_target_token_count,
+                    self._spec_k_target_token_count,
+                    100
+                    * (
+                        1
+                        - self._spec_k_target_top_k_sum
+                        / self._spec_k_target_token_count
+                        / policy.base_top_k
+                    ),
+                    self._spec_k_finished_request_count,
+                )
             for req_id, request in self.requests.items():
                 state = self._spec_k_request_states.get(req_id)
                 if state is not None:
