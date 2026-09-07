@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM Ascend project
 
-from types import SimpleNamespace
+from types import MethodType, SimpleNamespace
 
 import pytest
 import torch
 
+from vllm_ascend.ascend_forward_context import MoECommType
+from vllm_ascend.ops.fused_moe import routed_experts as routed_experts_module
 from vllm_ascend.ops.fused_moe.routed_experts import AscendRoutedExperts, EplbExpertTensorList
 
 
@@ -106,3 +108,147 @@ def test_update_expert_map_preserves_upstream_and_legacy_contracts(monkeypatch):
 
     assert routed_experts.ascend_expert_map is legacy_map
     assert expert_map_manager._expert_map is legacy_map
+
+
+def test_mc2_dp_chunk_slices_spec_k_and_keeps_collective_count(monkeypatch):
+    routed_experts = AscendRoutedExperts.__new__(AscendRoutedExperts)
+    object.__setattr__(routed_experts, "moe_config", SimpleNamespace(dp_rank=0, tp_size=1))
+    object.__setattr__(routed_experts, "return_with_event", False)
+
+    dp_metadata = SimpleNamespace(
+        num_tokens_across_dp_cpu=torch.tensor([384, 160]),
+        local_sizes=None,
+    )
+    forward_context = SimpleNamespace(dp_metadata=dp_metadata)
+    token_top_ks = torch.arange(384)
+    extra_context = SimpleNamespace(
+        max_tokens_across_dp=384,
+        padded_num_tokens=384,
+        mc2_mask=torch.ones(384, dtype=torch.bool),
+        token_top_ks=token_top_ks,
+        moe_comm_type=MoECommType.MC2,
+    )
+    monkeypatch.setattr(routed_experts_module, "get_forward_context", lambda: forward_context)
+    monkeypatch.setattr(routed_experts_module, "get_mc2_tokens_capacity", lambda: 256)
+    monkeypatch.setattr(routed_experts_module, "_EXTRA_CTX", extra_context)
+
+    calls = []
+
+    def fake_forward_impl(
+        _self,
+        *,
+        hidden_states,
+        router_logits,
+        input_ids,
+        _disable_chunking,
+    ):
+        calls.append(
+            {
+                "hidden": hidden_states.clone(),
+                "router": router_logits.clone(),
+                "input_ids": input_ids.clone(),
+                "token_top_ks": extra_context.token_top_ks.clone(),
+                "chunk_sizes": list(dp_metadata.local_sizes),
+                "max_tokens": extra_context.max_tokens_across_dp,
+                "padded_tokens": extra_context.padded_num_tokens,
+                "mask": extra_context.mc2_mask.clone(),
+                "disabled": _disable_chunking,
+            }
+        )
+        return hidden_states + 1000
+
+    object.__setattr__(
+        routed_experts,
+        "forward_impl",
+        MethodType(fake_forward_impl, routed_experts),
+    )
+    hidden_states = torch.arange(384, dtype=torch.float32).unsqueeze(-1)
+    router_logits = hidden_states + 10
+    input_ids = torch.arange(384)
+
+    output = AscendRoutedExperts._forward_impl_chunked(
+        routed_experts,
+        hidden_states=hidden_states,
+        router_logits=router_logits,
+        input_ids=input_ids,
+        token_top_ks=token_top_ks,
+    )
+
+    torch.testing.assert_close(output, hidden_states + 1000)
+    assert [call["chunk_sizes"] for call in calls] == [[256, 160], [128, 0]]
+    assert [call["max_tokens"] for call in calls] == [256, 128]
+    assert [call["padded_tokens"] for call in calls] == [256, 128]
+    assert [int(call["mask"].sum()) for call in calls] == [256, 128]
+    assert torch.equal(calls[0]["token_top_ks"], token_top_ks[:256])
+    assert torch.equal(calls[1]["token_top_ks"], token_top_ks[256:])
+    assert all(call["disabled"] for call in calls)
+    assert dp_metadata.local_sizes is None
+    assert extra_context.max_tokens_across_dp == 384
+    assert extra_context.padded_num_tokens == 384
+    assert extra_context.token_top_ks is token_top_ks
+
+
+def test_mc2_dp_chunk_short_rank_uses_masked_dummy_chunk(monkeypatch):
+    routed_experts = AscendRoutedExperts.__new__(AscendRoutedExperts)
+    object.__setattr__(routed_experts, "moe_config", SimpleNamespace(dp_rank=1, tp_size=1))
+    object.__setattr__(routed_experts, "return_with_event", False)
+
+    dp_metadata = SimpleNamespace(
+        num_tokens_across_dp_cpu=torch.tensor([384, 160]),
+        local_sizes=None,
+    )
+    forward_context = SimpleNamespace(dp_metadata=dp_metadata)
+    token_top_ks = torch.arange(160)
+    extra_context = SimpleNamespace(
+        max_tokens_across_dp=384,
+        padded_num_tokens=384,
+        mc2_mask=torch.ones(384, dtype=torch.bool),
+        token_top_ks=token_top_ks,
+        moe_comm_type=MoECommType.MC2,
+    )
+    monkeypatch.setattr(routed_experts_module, "get_forward_context", lambda: forward_context)
+    monkeypatch.setattr(routed_experts_module, "get_mc2_tokens_capacity", lambda: 256)
+    monkeypatch.setattr(routed_experts_module, "_EXTRA_CTX", extra_context)
+
+    calls = []
+
+    def fake_forward_impl(
+        _self,
+        *,
+        hidden_states,
+        router_logits,
+        input_ids,
+        _disable_chunking,
+    ):
+        calls.append(
+            (
+                hidden_states.clone(),
+                extra_context.token_top_ks.clone(),
+                extra_context.mc2_mask.clone(),
+                list(dp_metadata.local_sizes),
+            )
+        )
+        return hidden_states + 1000
+
+    object.__setattr__(
+        routed_experts,
+        "forward_impl",
+        MethodType(fake_forward_impl, routed_experts),
+    )
+    hidden_states = torch.arange(160, dtype=torch.float32).unsqueeze(-1)
+
+    output = AscendRoutedExperts._forward_impl_chunked(
+        routed_experts,
+        hidden_states=hidden_states,
+        router_logits=hidden_states + 10,
+        input_ids=torch.arange(160),
+        token_top_ks=token_top_ks,
+    )
+
+    torch.testing.assert_close(output, hidden_states + 1000)
+    assert len(calls) == 2
+    assert calls[0][0].shape[0] == 160
+    assert calls[1][0].shape[0] == 1
+    assert torch.equal(calls[1][1], token_top_ks[-1:])
+    assert int(calls[1][2].sum()) == 0
+    assert calls[1][3] == [128, 0]

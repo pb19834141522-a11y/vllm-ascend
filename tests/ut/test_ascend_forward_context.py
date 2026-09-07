@@ -252,6 +252,20 @@ def test_select_moe_comm_method_a2_spec_k_uses_all2allv_over_mc2_capacity(monkey
     assert afc.select_moe_comm_method(num_tokens, vllm_config) == expected
 
 
+def test_select_moe_comm_method_a2_dp_chunk_keeps_mc2_over_capacity(monkeypatch):
+    _patch_select_moe_comm_method_deps(
+        monkeypatch,
+        device_type=afc.AscendDeviceType.A2,
+        capacity=128,
+        ep_world_size=8,
+        spec_k_enabled=True,
+    )
+    monkeypatch.setattr(afc.envs_ascend, "VLLM_ASCEND_ENABLE_MOE_DP_CHUNK", True)
+    vllm_config = _make_vllm_config(world_size=8, num_experts=128)
+
+    assert afc.select_moe_comm_method(129, vllm_config) == MoECommType.MC2
+
+
 @pytest.mark.parametrize(
     ("num_tokens", "expected"),
     [

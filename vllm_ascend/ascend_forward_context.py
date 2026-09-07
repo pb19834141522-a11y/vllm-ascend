@@ -11,6 +11,7 @@ from vllm.distributed import get_dp_group, get_ep_group, get_tensor_model_parall
 from vllm.forward_context import BatchDescriptor, get_forward_context, set_forward_context
 from vllm.logger import logger
 
+from vllm_ascend import envs as envs_ascend
 from vllm_ascend.ascend_config import _MEGA_MOE_SUPPORTED, get_ascend_config
 from vllm_ascend.utils import (
     AscendDeviceType,
@@ -34,7 +35,8 @@ _MRV2_IN_PROFILE_RUN: ContextVar[bool] = ContextVar("_MRV2_IN_PROFILE_RUN", defa
 
 _MEGA_MOE_TOKENS_PER_RANK_LIMIT = 4096
 _DISPATCH_FFN_COMBINE_TOKENS_PER_RANK_LIMIT = 512
-_MC2_TOKENS_PER_RANK_LIMIT = 512
+# A2 MoeDistributeDispatchV2 rejects larger batches during tiling.
+_MC2_TOKENS_PER_RANK_LIMIT = 256
 
 
 @contextmanager
@@ -263,7 +265,11 @@ def _select_a2_moe_comm_method(
     if (
         num_experts_per_device <= 24
         and (ep_world_size >= 16 or spec_k_enabled)
-        and (num_tokens is None or num_tokens <= mc2_tokens_capacity)
+        and (
+            num_tokens is None
+            or num_tokens <= mc2_tokens_capacity
+            or envs_ascend.VLLM_ASCEND_ENABLE_MOE_DP_CHUNK
+        )
     ):
         return MoECommType.MC2
     if spec_k_enabled:

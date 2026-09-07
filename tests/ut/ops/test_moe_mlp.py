@@ -107,6 +107,87 @@ class TestUnifiedApplyMlpRequest(unittest.TestCase):
         self.assertEqual(first_call.kwargs["weight"][0].shape, torch.Size([2, 16, 8]))
         self.assertEqual(second_call.kwargs["weight"][0].shape, torch.Size([2, 8, 8]))
 
+    def test_unquant_apply_mlp_clipped_swiglu_skips_padding(self):
+        hidden_states = torch.randn(2, 8)
+        gate_up_out = torch.randn(2, 16)
+        expected = torch.randn(2, 8)
+        w1 = torch.randn(2, 8, 16)
+        w2 = torch.randn(2, 8, 8)
+
+        for group_list, group_list_type in (
+            (torch.tensor([1, 1]), 1),
+            (torch.tensor([1, 2]), 0),
+        ):
+            with self.subTest(group_list_type=group_list_type):
+                with (
+                    patch(
+                        "vllm_ascend.ops.fused_moe.moe_mlp.torch_npu.npu_grouped_matmul",
+                        side_effect=[[gate_up_out], [expected]],
+                        create=True,
+                    ),
+                    patch(
+                        "vllm_ascend.ops.fused_moe.moe_mlp.torch_npu.npu_clipped_swiglu",
+                        return_value=gate_up_out,
+                        create=True,
+                    ) as mock_clipped_swiglu,
+                    patch(
+                        "vllm_ascend.ops.fused_moe.moe_mlp.envs_ascend.VLLM_ASCEND_USE_CLIPPED_SWIGLU",
+                        True,
+                        create=True,
+                    ),
+                ):
+                    output, _ = unquant_apply_mlp(
+                        hidden_states=hidden_states,
+                        w1=w1,
+                        w2=w2,
+                        group_list=group_list,
+                        group_list_type=group_list_type,
+                    )
+
+                self.assertIs(output, expected)
+                torch.testing.assert_close(
+                    mock_clipped_swiglu.call_args.kwargs["group_index"],
+                    torch.tensor([2]),
+                )
+                self.assertEqual(mock_clipped_swiglu.call_args.kwargs["limit"], float("inf"))
+
+    def test_unquant_apply_mlp_preserves_explicit_swiglu_limit(self):
+        hidden_states = torch.randn(2, 8)
+        gate_up_out = torch.randn(2, 16)
+        expected = torch.randn(2, 8)
+        with (
+            patch(
+                "vllm_ascend.ops.fused_moe.moe_mlp.torch_npu.npu_grouped_matmul",
+                side_effect=[[gate_up_out], [expected]],
+                create=True,
+            ),
+            patch(
+                "vllm_ascend.ops.fused_moe.moe_mlp.torch_npu.npu_clipped_swiglu",
+                create=True,
+            ) as mock_clipped_swiglu,
+            patch(
+                "vllm_ascend.ops.fused_moe.moe_mlp.torch_npu.npu_swiglu",
+                return_value=gate_up_out[:, :8],
+                create=True,
+            ) as mock_swiglu,
+            patch(
+                "vllm_ascend.ops.fused_moe.moe_mlp.envs_ascend.VLLM_ASCEND_USE_CLIPPED_SWIGLU",
+                True,
+                create=True,
+            ),
+        ):
+            output, _ = unquant_apply_mlp(
+                hidden_states=hidden_states,
+                w1=torch.randn(2, 8, 16),
+                w2=torch.randn(2, 8, 8),
+                group_list=torch.tensor([1, 1]),
+                swiglu_limit=7.0,
+            )
+
+        self.assertIs(output, expected)
+        mock_clipped_swiglu.assert_not_called()
+        mock_swiglu.assert_called_once()
+
     def test_request_unquant_path(self):
         hidden_states = torch.randn(2, 8)
         expected = torch.randn(2, 8)

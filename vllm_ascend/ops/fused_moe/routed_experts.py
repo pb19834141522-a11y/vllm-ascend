@@ -15,6 +15,7 @@
 # limitations under the License.
 #
 from collections.abc import Iterable
+from contextlib import contextmanager
 from copy import copy
 from types import SimpleNamespace
 
@@ -29,8 +30,9 @@ from vllm.model_executor.layers.fused_moe.config import FusedMoEConfig
 from vllm.model_executor.layers.fused_moe.unquantized_fused_moe_method import UnquantizedFusedMoEMethod
 from vllm.model_executor.utils import replace_parameter
 
+from vllm_ascend import envs as envs_ascend
 from vllm_ascend.ascend_config import _MEGA_MOE_SUPPORTED, get_ascend_config
-from vllm_ascend.ascend_forward_context import _EXTRA_CTX, MoECommType
+from vllm_ascend.ascend_forward_context import _EXTRA_CTX, MoECommType, get_mc2_tokens_capacity
 from vllm_ascend.eplb.adaptor.vllm_adaptor import VllmEplbAdaptor
 from vllm_ascend.eplb.core.eplb_utils import init_eplb_config
 from vllm_ascend.lora.fused_moe import sync_lora_context
@@ -473,6 +475,133 @@ class AscendRoutedExperts(RoutedExperts):  # type: ignore[no-redef]
             quant_type = getattr(method, "quant_type", QuantType.NONE)
         return quant_type
 
+    def _should_chunk_mc2(self, num_tokens: int) -> bool:
+        capacity = get_mc2_tokens_capacity()
+        dp_metadata = get_forward_context().dp_metadata
+        max_tokens = (
+            int(dp_metadata.num_tokens_across_dp_cpu.max().item())
+            if dp_metadata is not None
+            else num_tokens
+        )
+        return (
+            envs_ascend.VLLM_ASCEND_ENABLE_MOE_DP_CHUNK
+            and _EXTRA_CTX.moe_comm_type is MoECommType.MC2
+            and capacity is not None
+            and max_tokens > capacity
+        )
+
+    @contextmanager
+    def _chunk_moe_context(
+        self,
+        chunk_sizes: list[int],
+        local_actual_tokens: int,
+        token_top_ks: torch.Tensor | None,
+    ):
+        forward_context = get_forward_context()
+        dp_metadata = forward_context.dp_metadata
+        original_local_sizes = dp_metadata.local_sizes if dp_metadata is not None else None
+        original_max_tokens = _EXTRA_CTX.max_tokens_across_dp
+        original_padded_tokens = _EXTRA_CTX.padded_num_tokens
+        original_mc2_mask = _EXTRA_CTX.mc2_mask
+        original_token_top_ks = _EXTRA_CTX.token_top_ks
+        if original_mc2_mask is None:
+            raise RuntimeError("MC2 DP chunking requires a reserved MC2 mask")
+
+        max_chunk_tokens = max(chunk_sizes)
+        tp_size = self.moe_config.tp_size
+        padded_tokens = (max_chunk_tokens + tp_size - 1) // tp_size * tp_size
+        if dp_metadata is not None:
+            dp_metadata.local_sizes = chunk_sizes
+        _EXTRA_CTX.max_tokens_across_dp = max_chunk_tokens
+        _EXTRA_CTX.padded_num_tokens = padded_tokens
+        _EXTRA_CTX.token_top_ks = token_top_ks
+        chunk_mc2_mask = original_mc2_mask[:padded_tokens]
+        chunk_mc2_mask[:local_actual_tokens] = True
+        chunk_mc2_mask[local_actual_tokens:] = False
+        _EXTRA_CTX.mc2_mask = chunk_mc2_mask
+        try:
+            yield
+        finally:
+            if dp_metadata is not None:
+                dp_metadata.local_sizes = original_local_sizes
+            _EXTRA_CTX.max_tokens_across_dp = original_max_tokens
+            _EXTRA_CTX.padded_num_tokens = original_padded_tokens
+            _EXTRA_CTX.mc2_mask = original_mc2_mask
+            _EXTRA_CTX.token_top_ks = original_token_top_ks
+
+    def _forward_impl_chunked(
+        self,
+        *,
+        hidden_states: torch.Tensor,
+        router_logits: torch.Tensor,
+        input_ids: torch.Tensor | None,
+        token_top_ks: torch.Tensor | None,
+    ):
+        forward_context = get_forward_context()
+        dp_metadata = forward_context.dp_metadata
+        num_tokens = hidden_states.size(0)
+        if num_tokens == 0:
+            raise ValueError("MC2 DP chunking requires at least one local token")
+
+        if dp_metadata is None:
+            tokens_across_dp = [num_tokens]
+            dp_rank = 0
+        else:
+            tokens_across_dp = [int(size) for size in dp_metadata.num_tokens_across_dp_cpu.tolist()]
+            dp_rank = self.moe_config.dp_rank
+            if tokens_across_dp[dp_rank] != num_tokens:
+                raise ValueError(
+                    "MC2 DP chunk metadata does not match local hidden states: "
+                    f"{tokens_across_dp[dp_rank]} != {num_tokens}"
+                )
+
+        chunk_size = get_mc2_tokens_capacity()
+        assert chunk_size is not None and chunk_size > 0
+        max_tokens = max(tokens_across_dp)
+        logger.info_once(
+            "MC2 DP chunking active: max_tokens_across_dp=%d, chunk_size=%d",
+            max_tokens,
+            chunk_size,
+        )
+        outputs = torch.empty_like(hidden_states)
+        last_events = None
+
+        for chunk_start in range(0, max_tokens, chunk_size):
+            chunk_sizes = [min(max(size - chunk_start, 0), chunk_size) for size in tokens_across_dp]
+            local_actual = chunk_sizes[dp_rank]
+            # Every rank must enter every collective. A rank with no tokens in
+            # this chunk reuses one local token and masks it out completely.
+            local_compute = max(local_actual, 1)
+            local_start = min(chunk_start, num_tokens - 1)
+            local_end = local_start + local_compute
+            chunk_top_ks = token_top_ks[local_start:local_end] if token_top_ks is not None else None
+            chunk_input_ids = input_ids[local_start:local_end] if input_ids is not None else None
+            with self._chunk_moe_context(
+                chunk_sizes,
+                local_actual,
+                chunk_top_ks,
+            ):
+                chunk_result = self.forward_impl(
+                    hidden_states=hidden_states[local_start:local_end],
+                    router_logits=router_logits[local_start:local_end],
+                    input_ids=chunk_input_ids,
+                    _disable_chunking=True,
+                )
+
+            if self.return_with_event:
+                chunk_output, last_events = chunk_result
+            else:
+                chunk_output = chunk_result
+            if local_actual:
+                outputs[chunk_start : chunk_start + local_actual].copy_(
+                    chunk_output[:local_actual], non_blocking=True
+                )
+
+        if self.return_with_event:
+            assert last_events is not None
+            return outputs, last_events
+        return outputs
+
     def _select_experts(
         self,
         hidden_states: torch.Tensor,
@@ -550,6 +679,7 @@ class AscendRoutedExperts(RoutedExperts):  # type: ignore[no-redef]
         hidden_states: torch.Tensor,
         router_logits: torch.Tensor,
         input_ids: torch.Tensor | None = None,
+        _disable_chunking: bool = False,
     ):
         forward_context = get_forward_context()
         token_top_ks = getattr(_EXTRA_CTX, "token_top_ks", None)
@@ -559,6 +689,13 @@ class AscendRoutedExperts(RoutedExperts):  # type: ignore[no-redef]
             raise ValueError(
                 "Spec-K token top-k tensor must be 1D, "
                 f"got {token_top_ks.shape}."
+            )
+        if not _disable_chunking and self._should_chunk_mc2(hidden_states.size(0)):
+            return self._forward_impl_chunked(
+                hidden_states=hidden_states,
+                router_logits=router_logits,
+                input_ids=input_ids,
+                token_top_ks=token_top_ks,
             )
         # When static kernels are enabled, the forward pass runs twice
         # (compilation + capture), causing moe_layer_index to overflow.

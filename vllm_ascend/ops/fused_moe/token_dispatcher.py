@@ -142,14 +142,13 @@ class TokenDispatcherWithMC2(MoETokenDispatcher[MoEMC2CombineMetadata]):
         self.max_num_tokens_per_rank = num_tokens_per_tp_rank
         _max_global_bs = num_tokens_per_tp_rank * self.ep_world_size
 
-        # Spec-K needs the route-level x_active_mask, which is only available
-        # in MC2's non-zero-global_bs mode. Preserve the existing uniform mode
-        # for non-Spec-K forwards unless DP all-reduce is skipped.
-        spec_k_enabled = getattr(getattr(get_ascend_config(), "spec_k_config", None), "enabled", False)
-        self.spec_k_enabled = spec_k_enabled is True
-        self.global_bs = (
-            _max_global_bs if self.spec_k_enabled or should_skip_allreduce_across_dp_group(vllm_config) else 0
-        )
+        self.spec_k_enabled = get_ascend_config().spec_k_config.enabled is True
+
+        # When allreduce across DP is not skipped, tokens are uniform across ranks:
+        # use global_bs=0 (uniform mode) and pass the token-level mc2_mask.
+        # When allreduce is skipped, tokens may differ per rank:
+        # use the real global_bs and do not pass mc2_mask.
+        self.global_bs = _max_global_bs if should_skip_allreduce_across_dp_group(vllm_config) else 0
 
         # NOTE: When enable_mc2_hierarchy_comm is true, we need pass in `comm_alg` to mc2 op.
         self.need_comm_alg = get_ascend_config().enable_mc2_hierarchy_comm
@@ -199,9 +198,13 @@ class TokenDispatcherWithMC2(MoETokenDispatcher[MoEMC2CombineMetadata]):
             "expert_token_nums_type": expert_token_nums_type,
         }
         if self.global_bs == 0:
-            kwargs_mc2["x_active_mask"] = token_dispatch_input.routing.mc2_mask
-        elif self.spec_k_enabled:
-            kwargs_mc2["x_active_mask"] = (topk_ids >= 0) & (topk_ids < self.moe_expert_num)
+            x_active_mask = token_dispatch_input.routing.mc2_mask
+            if self.spec_k_enabled:
+                valid_expert_mask = (topk_ids >= 0) & (topk_ids < self.moe_expert_num)
+                if x_active_mask is not None:
+                    valid_expert_mask &= x_active_mask.unsqueeze(-1)
+                x_active_mask = valid_expert_mask
+            kwargs_mc2["x_active_mask"] = x_active_mask
 
         stage1_kwargs = {
             "scales": None,
@@ -314,8 +317,6 @@ class TokenDispatcherWithMC2(MoETokenDispatcher[MoEMC2CombineMetadata]):
             "global_bs": self.global_bs,
         }
         if self.global_bs == 0:
-            kwargs_mc2["x_active_mask"] = combine_metadata.mc2_mask
-        elif self.spec_k_enabled:
             kwargs_mc2["x_active_mask"] = combine_metadata.x_active_mask
 
         if combine_metadata.quant.dispatch_with_quant:

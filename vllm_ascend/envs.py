@@ -90,6 +90,14 @@ env_variables: dict[str, Callable[[], Any]] = {
     # `dispatch_ffn_combine` can be used only for moe layer with W8A8, EP<=32, non-mtp, non-dynamic-eplb.
     # `mega_moe` can be used only for moe layer with W8A8/W4A8/bf16(none quant), EP<=64, non-dynamic-eplb.
     "VLLM_ASCEND_ENABLE_FUSED_MC2": lambda: int(os.getenv("VLLM_ASCEND_ENABLE_FUSED_MC2", "0")),
+    # Enable A2 MC2 DP chunking (0/1, default 0, non-sensitive).
+    "VLLM_ASCEND_ENABLE_MOE_DP_CHUNK": lambda: bool(
+        int(os.getenv("VLLM_ASCEND_ENABLE_MOE_DP_CHUNK", "0"))
+    ),
+    # Enable the grouped clipped-SwiGLU fast path (0/1, default 0, non-sensitive).
+    "VLLM_ASCEND_USE_CLIPPED_SWIGLU": lambda: bool(
+        int(os.getenv("VLLM_ASCEND_USE_CLIPPED_SWIGLU", "0"))
+    ),
     # DEPRECATED: VLLM_ASCEND_BALANCE_SCHEDULING env var will be removed in a future release.
     # Use --additional-config '{"enable_balance_scheduling": true}' instead.
     "VLLM_ASCEND_BALANCE_SCHEDULING": lambda: bool(int(os.getenv("VLLM_ASCEND_BALANCE_SCHEDULING", "0"))),

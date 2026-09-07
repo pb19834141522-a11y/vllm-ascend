@@ -21,6 +21,7 @@ from torch.nn.functional import pad
 from vllm.model_executor.layers.fused_moe.activation import MoEActivation
 from vllm.triton_utils import HAS_TRITON
 
+from vllm_ascend import envs as envs_ascend
 from vllm_ascend.ascend_forward_context import _EXTRA_CTX, MoECommType
 from vllm_ascend.device.device_op import DeviceOperator
 from vllm_ascend.ops.activation import AscendSwigluOAIAndMul, AscendSwigluStepAndMul
@@ -576,6 +577,22 @@ def unquant_apply_mlp(
     elif activation == MoEActivation.GELU_TANH:
         gate, up = gate_up_out.chunk(2, dim=-1)
         gate_up_out = torch.nn.functional.gelu(gate, approximate="tanh") * up
+    elif envs_ascend.VLLM_ASCEND_USE_CLIPPED_SWIGLU and swiglu_limit <= 0:
+        if group_list_type == 1:
+            group_index = group_list.sum().unsqueeze(0)
+        elif group_list_type == 0:
+            group_index = group_list[-1:]
+        else:
+            raise ValueError(f"Unsupported group_list_type: {group_list_type}")
+        gate_up_out = torch_npu.npu_clipped_swiglu(
+            gate_up_out,
+            group_index=group_index,
+            dim=-1,
+            alpha=1.0,
+            limit=float("inf"),
+            bias=0.0,
+            interleaved=False,
+        )
     else:
         if swiglu_limit > 0:
             gate, up = gate_up_out.chunk(2, dim=-1)
