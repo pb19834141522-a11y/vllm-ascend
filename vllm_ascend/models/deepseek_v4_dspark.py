@@ -364,7 +364,7 @@ class DSparkDeepseekV4ForCausalLM(nn.Module, DeepseekV2MixtureOfExperts):
         return self.model.markov_bias(markov_embed)
 
     def confidence_logits(self, hidden_states: torch.Tensor, markov_embed: torch.Tensor) -> torch.Tensor:
-        return self.model.confidence_logits(hidden_states, markov_embed)
+        return self.model.compute_confidence(hidden_states, markov_embed)
 
     def get_draft_kv_cache_layer_names(self) -> list[str]:
         return self.model.get_draft_kv_cache_layer_names()

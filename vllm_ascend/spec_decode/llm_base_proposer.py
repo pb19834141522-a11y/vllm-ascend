@@ -1349,7 +1349,10 @@ class AscendSpecDecodeBaseProposer(SpecDecodeBaseProposer):
         is_prefill=None,
     ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         ascend_config = get_ascend_config()
-        return_draft_logits = ascend_config.spec_k_config.enabled and self.method == "draft_model"
+        return_draft_logits = (
+            ascend_config.spec_k_config.enabled
+            and ascend_config.spec_k_config.supports_draft_logits(self.method)
+        )
         # The lifecycle of `input_ids`, `positions`, `hidden_states` runs through all
         # speculative tokens' proposings. `model_input_ids`, `model_positions` and
         # `model_hidden_states` represent the speculative model inputs.
