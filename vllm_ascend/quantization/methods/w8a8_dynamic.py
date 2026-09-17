@@ -273,6 +273,7 @@ class AscendW8A8DynamicFusedMoEMethod(AscendMoEScheme):
             num_shared_experts=n_shared_experts,
             num_experts=num_logical_experts,
             tid2eid=tid2eid,
+            layer=layer,
         )
         assert topk_ids is not None
         assert topk_weights is not None

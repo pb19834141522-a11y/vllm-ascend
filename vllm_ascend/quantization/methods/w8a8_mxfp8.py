@@ -285,6 +285,7 @@ class AscendW8A8MXFP8DynamicFusedMoEMethod(AscendMoEScheme):
             e_score_correction_bias=e_score_correction_bias,
             num_experts=num_logical_experts,
             tid2eid=tid2eid,
+            layer=layer,
         )
 
         if topk_weights is None or topk_ids is None:

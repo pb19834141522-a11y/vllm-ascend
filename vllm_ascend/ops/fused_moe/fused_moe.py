@@ -225,6 +225,7 @@ class AscendUnquantizedFusedMoEMethod(UnquantizedFusedMoEMethod):
             num_experts=num_logical_experts,
             tid2eid=self.tid2eid,
             input_ids=input_ids,
+            layer=layer,
         )
 
         # Expert offload: incrementally page in needed experts, update log2phy

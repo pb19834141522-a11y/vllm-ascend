@@ -223,6 +223,7 @@ class AscendW4A8MXFPDynamicFusedMoEMethod(AscendMoEScheme):
             routed_scaling_factor=routed_scaling_factor,
             num_experts=num_logical_experts,
             tid2eid=tid2eid,
+            layer=layer,
         )
 
         # this is a naive implementation for experts load balance so as

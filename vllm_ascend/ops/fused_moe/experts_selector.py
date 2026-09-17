@@ -23,7 +23,7 @@ from vllm.distributed import get_tp_group
 from vllm.forward_context import get_forward_context
 
 from vllm_ascend.ascend_config import get_ascend_config
-from vllm_ascend.ascend_forward_context import MoECommType
+from vllm_ascend.ascend_forward_context import _EXTRA_CTX, MoECommType
 from vllm_ascend.device.device_op import DeviceOperator
 from vllm_ascend.distributed.utils import split_tensor_along_first_dim
 
@@ -149,6 +149,7 @@ def select_experts(
     num_experts: int = -1,
     input_ids: torch.Tensor | None = None,
     tid2eid: torch.Tensor | None = None,
+    layer: torch.nn.Module | None = None,
 ):
     """
     Fused experts with select experts.
@@ -215,6 +216,8 @@ def select_experts(
         # Apply routed scaling factor to weights
         if routed_scaling_factor != 1.0:
             topk_weights = topk_weights * routed_scaling_factor
+    apply_dynamic_top_k(topk_weights, topk_ids, layer)
+
     if mix_placement:
         shared_expert_routing_factor = 1.0 if is_support_npu_moe_gating_top_k else (1 / routed_scaling_factor)
         batch_size = topk_ids.shape[0]
@@ -233,6 +236,51 @@ def select_experts(
         topk_weights = torch.cat([topk_weights, pad_shared_expert_weights], dim=1)
 
     return topk_weights, topk_ids
+
+
+def apply_dynamic_top_k(
+    topk_weights: torch.Tensor,
+    topk_ids: torch.Tensor,
+    layer: torch.nn.Module | None,
+) -> None:
+    """Mask routes above each token's Spec-K expert budget in-place.
+
+    The offload branch predates the ``AscendRoutedExperts`` refactor used by
+    the source Spec-K patch.  Applying the mask at this shared routing exit
+    covers all quantization methods and runs before the offload manager decides
+    which logical experts must be resident in HBM.
+    """
+    spec_k_config = getattr(get_ascend_config(), "spec_k_config", None)
+    if spec_k_config is None or not spec_k_config.enabled:
+        return
+    if layer is not None and getattr(layer, "_spec_k_full_top_k", False):
+        return
+
+    token_top_ks = _EXTRA_CTX.token_top_ks
+    if not torch.is_tensor(token_top_ks):
+        return
+    if token_top_ks.ndim != 1:
+        raise ValueError(
+            "Spec-K token top-k tensor must be 1D, "
+            f"got {token_top_ks.shape}."
+        )
+    if token_top_ks.shape != topk_ids.shape[:-1]:
+        raise ValueError(
+            "Spec-K token top-k shape must match the token dimensions of "
+            f"the routed experts: {token_top_ks.shape} != "
+            f"{topk_ids.shape[:-1]}."
+        )
+
+    route_mask = torch.arange(
+        topk_weights.shape[-1], device=topk_weights.device
+    ) >= token_top_ks.unsqueeze(-1)
+    writable_ids = (
+        topk_ids.view(torch.int32)
+        if topk_ids.dtype == torch.uint32
+        else topk_ids
+    )
+    writable_ids.masked_fill_(route_mask, -1)
+    topk_weights.masked_fill_(route_mask, 0.0)
 
 
 @dataclass
