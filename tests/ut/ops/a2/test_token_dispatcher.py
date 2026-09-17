@@ -15,6 +15,7 @@
 # limitations under the License.
 # This file is a part of the vllm-ascend project.
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock, PropertyMock, patch
 
 import numpy as np
@@ -450,6 +451,50 @@ def test_allgather_token_dispatch_quant_mode_without_dynamic_scale():
         assert init_kwargs["quant_mode"] == case["expected_quant_mode"]
         assert init_kwargs["act_quant_type"] == case["expected_act_quant_type"]
         assert (output.dynamic_scale is not None) == case["expect_dynamic_scale"]
+
+
+def test_allgather_w4a8_spec_k_handles_invalid_routes():
+    dispatcher = TokenDispatcherWithAllGather(
+        top_k=2,
+        num_experts=4,
+        num_local_experts=2,
+    )
+    token_dispatch_input = build_token_dispatch_input_fixture(
+        hidden_states=torch.randn(1, 4),
+        topk_weights=torch.tensor([[0.75, 0.0]]),
+        topk_ids=torch.tensor([[0, -1]], dtype=torch.int32),
+        expert_map=torch.tensor([0, 1, -1, -1], dtype=torch.int32),
+        quant_type=QuantType.W4A8,
+    )
+    init_routing_output = (
+        torch.randn(2, 4),
+        torch.tensor([0, 1], dtype=torch.int32),
+        torch.tensor([1, 0], dtype=torch.int64),
+        None,
+    )
+
+    with (
+        patch(
+            "vllm_ascend.ops.fused_moe.token_dispatcher.get_ascend_config",
+            return_value=SimpleNamespace(
+                spec_k_config=SimpleNamespace(enabled=True)
+            ),
+        ),
+        patch(
+            "vllm_ascend.ops.fused_moe.token_dispatcher.get_ep_group",
+            return_value=SimpleNamespace(rank_in_group=0),
+        ),
+        patch(
+            "vllm_ascend.ops.fused_moe.token_dispatcher.DeviceOperator.npu_moe_init_routing",
+            return_value=init_routing_output,
+        ) as mock_init_routing,
+    ):
+        output = dispatcher.token_dispatch(token_dispatch_input)
+
+    init_kwargs = mock_init_routing.call_args.kwargs
+    assert init_kwargs["quant_mode"] == -1
+    assert output.dynamic_scale is None
+    assert output.combine_metadata.topk_weights.tolist() == [[0.75, 0.0]]
 
 
 def test_allgather_token_dispatch_mxfp4_keeps_prequantized_scale():
