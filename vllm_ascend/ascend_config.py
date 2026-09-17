@@ -594,7 +594,7 @@ class DynamicSpecConfig:
 class SpecKConfig:
     """Engine-global configuration for Spec-K dynamic expert routing."""
 
-    _DRAFT_LOGIT_METHODS = frozenset(("draft_model", "eagle", "eagle3", "mtp", "dflash"))
+    _DRAFT_LOGIT_METHODS = frozenset(("draft_model", "eagle", "eagle3", "mtp", "dflash", "dspark"))
 
     _VALID_KEYS = {
         "enabled",
@@ -693,9 +693,10 @@ class SpecKConfig:
             raise ValueError(
                 "Spec-K requires the draft proposer to set enforce_eager=true."
             )
-        if getattr(vllm_config.model_config, "quantization", None) is not None:
+        quantization = getattr(vllm_config.model_config, "quantization", None)
+        if quantization not in (None, "ascend"):
             raise ValueError(
-                "Spec-K does not yet support quantized target models."
+                "Spec-K only supports unquantized or Ascend-quantized target models."
             )
         if vllm_config.scheduler_config.async_scheduling:
             raise ValueError("Spec-K does not yet support async scheduling.")

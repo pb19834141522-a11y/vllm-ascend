@@ -384,6 +384,14 @@ class TokenDispatcherWithAllGather(MoETokenDispatcher[MoEAllGatherCombineMetadat
         # is quantized again inside the MLP path.
         with_quant = token_dispatch_input.quant.dispatch_with_quant and quant_type != QuantType.W8A8FP
         with_quant = with_quant and not unquantized_mxfp4_dispatch
+        spec_k_enabled = get_ascend_config().spec_k_config.enabled is True
+        if spec_k_enabled and quant_type == QuantType.W4A8:
+            # Spec-K marks dropped routes with an out-of-range expert id. The
+            # W4A8 quantized init-routing kernel does not accept that sentinel,
+            # while the BF16 routing path treats it as an inactive route. Keep
+            # routing in BF16 and let quant_apply_mlp dynamically quantize the
+            # compacted routed activations when dynamic_scale is None.
+            with_quant = False
         if has_lora(self.lora_context) and token_dispatch_input.quant.is_quant:
             validate_quant_moe_lora_activation_input(
                 quant_type=quant_type,
@@ -422,8 +430,10 @@ class TokenDispatcherWithAllGather(MoETokenDispatcher[MoEAllGatherCombineMetadat
             hidden_states = hidden_states * topk_weights.to(hidden_states.dtype)
         if expert_map is not None:
             global_num_experts = len(expert_map) + global_redundant_expert_num
-            mask = expert_map[topk_ids] != -1
-            topk_weights = topk_weights * mask
+            valid_expert_mask = (topk_ids >= 0) & (topk_ids < global_num_experts)
+            safe_topk_ids = topk_ids.masked_fill(~valid_expert_mask, 0)
+            local_expert_mask = expert_map[safe_topk_ids] != -1
+            topk_weights = topk_weights * (valid_expert_mask & local_expert_mask)
             first_expert_idx = get_ep_group().rank_in_group * self.num_experts_local
             last_expert_idx = first_expert_idx + self.num_experts_local
         else:
