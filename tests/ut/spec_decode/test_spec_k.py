@@ -22,6 +22,7 @@ def _vllm_config(
 ):
     speculative_config = SimpleNamespace(
         uses_draft_model=lambda: method == "draft_model",
+        method=method,
         enforce_eager=True,
     )
     return SimpleNamespace(
@@ -94,11 +95,21 @@ def test_spec_k_config_rejects_invalid_thresholds(config, match):
 
 
 def test_spec_k_config_rejects_other_speculative_methods():
-    with pytest.raises(ValueError, match="method='draft_model'"):
+    with pytest.raises(ValueError, match="provides draft logits"):
         SpecKConfig(
             {"enabled": True, "ppl_thresholds": [2.0]},
             _vllm_config(method="ngram"),
         )
+
+
+@pytest.mark.parametrize("method", ["draft_model", "eagle", "eagle3", "mtp", "dflash", "dspark"])
+def test_spec_k_config_accepts_draft_logit_methods(method):
+    config = SpecKConfig(
+        {"enabled": True, "ppl_thresholds": [2.0]},
+        _vllm_config(method=method),
+    )
+
+    assert config.enabled
 
 
 def test_spec_k_config_rejects_non_eager_draft_proposer():
@@ -112,8 +123,17 @@ def test_spec_k_config_rejects_non_eager_draft_proposer():
         )
 
 
-def test_spec_k_config_rejects_quantized_target():
-    with pytest.raises(ValueError, match="quantized target"):
+def test_spec_k_config_accepts_ascend_quantized_target():
+    config = SpecKConfig(
+        {"enabled": True, "ppl_thresholds": [2.0]},
+        _vllm_config(quantization="ascend"),
+    )
+
+    assert config.enabled
+
+
+def test_spec_k_config_rejects_other_quantized_target():
+    with pytest.raises(ValueError, match="Ascend-quantized"):
         SpecKConfig(
             {"enabled": True, "ppl_thresholds": [2.0]},
             _vllm_config(quantization="awq"),
