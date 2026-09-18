@@ -210,11 +210,27 @@ def _apply_token_top_ks(
             f"{token_top_ks.shape} != {topk_ids.shape[:-1]}"
         )
 
+    # DeepSeek-style routing can use correction-biased scores to select the
+    # full top-k expert set while using the unbiased, normalized scores as the
+    # actual mixture weights. Consequently, the slots returned by the router
+    # are not guaranteed to be ordered by their final contribution. Sort the
+    # selected expert/weight pairs after full-top-k normalization so Spec-K
+    # always drops the least-contributing routes. Do not renormalize after
+    # masking: Spec-K approximates the original mixture by removing terms.
+    if topk_ids.dtype == torch.uint32:
+        topk_ids = topk_ids.view(torch.int32)
+    sorted_weights, route_order = torch.sort(
+        topk_weights,
+        dim=-1,
+        descending=True,
+    )
+    sorted_ids = torch.gather(topk_ids, dim=-1, index=route_order)
+    topk_weights.copy_(sorted_weights)
+    topk_ids.copy_(sorted_ids)
+
     route_mask = torch.arange(
         topk_weights.shape[-1], device=topk_weights.device
     ) >= token_top_ks.unsqueeze(-1)
-    if topk_ids.dtype == torch.uint32:
-        topk_ids = topk_ids.view(torch.int32)
     topk_ids.masked_fill_(route_mask, invalid_expert_id)
     topk_weights.masked_fill_(route_mask, 0.0)
 

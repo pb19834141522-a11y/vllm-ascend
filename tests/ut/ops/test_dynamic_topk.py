@@ -27,7 +27,10 @@ from vllm_ascend.quantization.quant_type import QuantType
 
 def test_apply_token_top_ks_masks_routes_per_token():
     topk_ids = torch.tensor([[0, 1, 2, 3], [4, 5, 6, 7]], dtype=torch.int32)
-    topk_weights = torch.ones(2, 4)
+    topk_weights = torch.tensor(
+        [[0.4, 0.3, 0.2, 0.1], [0.8, 0.7, 0.6, 0.5]],
+        dtype=torch.float32,
+    )
 
     _apply_token_top_ks(
         topk_ids,
@@ -37,10 +40,28 @@ def test_apply_token_top_ks_masks_routes_per_token():
     )
 
     assert topk_ids.tolist() == [[0, 1, 2, 8], [4, 5, 8, 8]]
-    assert topk_weights.tolist() == [
-        [1.0, 1.0, 1.0, 0.0],
-        [1.0, 1.0, 0.0, 0.0],
-    ]
+    torch.testing.assert_close(
+        topk_weights,
+        torch.tensor([[0.4, 0.3, 0.2, 0.0], [0.8, 0.7, 0.0, 0.0]]),
+    )
+
+
+def test_apply_token_top_ks_keeps_largest_normalized_routes():
+    topk_ids = torch.tensor([[10, 11, 12, 13]], dtype=torch.int32)
+    topk_weights = torch.tensor([[0.10, 0.40, 0.20, 0.30]])
+
+    _apply_token_top_ks(
+        topk_ids,
+        topk_weights,
+        invalid_expert_id=16,
+        token_top_ks=torch.tensor([2], dtype=torch.int32),
+    )
+
+    assert topk_ids.tolist() == [[11, 13, 16, 16]]
+    torch.testing.assert_close(
+        topk_weights,
+        torch.tensor([[0.40, 0.30, 0.0, 0.0]]),
+    )
 
 
 def test_apply_token_top_ks_rejects_misaligned_shape():
