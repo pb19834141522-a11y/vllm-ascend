@@ -168,6 +168,7 @@ from vllm_ascend.spec_decode.spec_k import (
     SpecKPolicy,
     SpecKRequestState,
 )
+from vllm_ascend.spec_decode.spec_k_diagnostics import SpecKEntropyDiagnostics
 from vllm_ascend.spec_decode.step3p5 import AscendStep3p5MTPProposer
 from vllm_ascend.spec_decode.suffix_proposer import AscendSuffixDecodingProposer
 from vllm_ascend.spec_decode.utils import (
@@ -356,6 +357,9 @@ class NPUModelRunner(GPUModelRunner):
         self._spec_k_draft_top_ks_cpu: torch.Tensor | None = None
         self._spec_k_input_top_ks: CpuGpuBuffer | None = None
         self._spec_k_draft_top_ks: torch.Tensor | None = None
+        self._spec_k_draft_entropies_cpu: torch.Tensor | None = None
+        self._spec_k_draft_entropies: torch.Tensor | None = None
+        self._spec_k_entropy_diagnostics: SpecKEntropyDiagnostics | None = None
         # Accuracy-run telemetry. Counters are process-local and cumulative;
         # the evaluator takes a before/after window and aggregates DP ranks.
         self._spec_k_finished_top_k_sum = 0
@@ -767,6 +771,34 @@ class NPUModelRunner(GPUModelRunner):
             device="cpu",
             pin_memory=self.pin_memory,
         )
+        diagnostics_dir = getattr(
+            self.ascend_config.spec_k_config,
+            "entropy_diagnostics_dir",
+            None,
+        )
+        # Draft outputs are replicated across TP ranks. Only TP0 writes them,
+        # while each DP replica keeps its own file.
+        if diagnostics_dir is not None and self.tp_rank == 0:
+            self._spec_k_draft_entropies_cpu = torch.empty(
+                (
+                    self.max_num_reqs,
+                    self.num_spec_tokens,
+                ),
+                dtype=torch.float32,
+                device="cpu",
+                pin_memory=self.pin_memory,
+            )
+            self._spec_k_entropy_diagnostics = SpecKEntropyDiagnostics(
+                diagnostics_dir,
+                dp_rank=self.dp_rank,
+                base_top_k=base_top_k,
+                ppl_thresholds=self.ascend_config.spec_k_config.ppl_thresholds,
+                log_interval=getattr(
+                    self.ascend_config.spec_k_config,
+                    "entropy_diagnostics_log_interval",
+                    10000,
+                ),
+            )
 
     def _get_or_create_spec_k_state(self, req_id: str) -> SpecKRequestState:
         state = self._spec_k_request_states.get(req_id)
@@ -1681,6 +1713,7 @@ class NPUModelRunner(GPUModelRunner):
     ) -> list[list[int]] | None:
         self._log_propose_draft_token_ids_entry(spec_decode_metadata, num_scheduled_tokens)
         draft_token_top_ks = None
+        draft_token_entropies = None
         if not self.drafter:
             # Speculative decoding is not enabled.
             draft_token_ids = None
@@ -1893,7 +1926,13 @@ class NPUModelRunner(GPUModelRunner):
                     )
                 policy = self._spec_k_policy
                 assert policy is not None
-                draft_token_top_ks = policy.top_ks_from_logits(draft_token_logits)
+                if getattr(self, "_spec_k_entropy_diagnostics", None) is not None:
+                    (
+                        draft_token_top_ks,
+                        draft_token_entropies,
+                    ) = policy.top_ks_and_entropy_from_logits(draft_token_logits)
+                else:
+                    draft_token_top_ks = policy.top_ks_from_logits(draft_token_logits)
             else:
                 draft_token_ids = cast(list[list[int]] | None, draft_output)
             if get_pp_group().world_size > 1 and hasattr(
@@ -1907,6 +1946,7 @@ class NPUModelRunner(GPUModelRunner):
             raise ValueError(f"Unknown speculative decoding method: {self.speculative_config.method}")
 
         self._spec_k_draft_top_ks = draft_token_top_ks
+        self._spec_k_draft_entropies = draft_token_entropies
         return draft_token_ids
 
     def _log_propose_draft_token_ids_entry(
@@ -1972,6 +2012,12 @@ class NPUModelRunner(GPUModelRunner):
         draft_token_top_ks = self._spec_k_draft_top_ks
         if self._spec_k_enabled and not torch.is_tensor(draft_token_top_ks):
             raise RuntimeError("Spec-K draft top-k values were not produced.")
+        draft_token_entropies = self._spec_k_draft_entropies
+        entropy_diagnostics = getattr(self, "_spec_k_entropy_diagnostics", None)
+        if entropy_diagnostics is not None and not torch.is_tensor(
+            draft_token_entropies
+        ):
+            raise RuntimeError("Spec-K draft entropies were not produced.")
         assert self.draft_token_ids_event is not None
         assert self.draft_token_ids_copy_stream is not None
         assert self.draft_token_ids_cpu is not None
@@ -1992,6 +2038,11 @@ class NPUModelRunner(GPUModelRunner):
                     self._spec_k_draft_top_ks_cpu[
                         :num_reqs, : num_spec_tokens + 1
                     ].copy_(draft_token_top_ks, non_blocking=True)
+                    if entropy_diagnostics is not None:
+                        assert self._spec_k_draft_entropies_cpu is not None
+                        self._spec_k_draft_entropies_cpu[
+                            :num_reqs, :num_spec_tokens
+                        ].copy_(draft_token_entropies, non_blocking=True)
             else:
                 self.draft_token_ids_cpu[:num_reqs, :num_spec_tokens] = 0
                 if self._spec_k_enabled:
@@ -2001,12 +2052,22 @@ class NPUModelRunner(GPUModelRunner):
                     self._spec_k_draft_top_ks_cpu[
                         :num_reqs, : num_spec_tokens + 1
                     ].fill_(policy.base_top_k)
+                    if entropy_diagnostics is not None:
+                        assert self._spec_k_draft_entropies_cpu is not None
+                        self._spec_k_draft_entropies_cpu[
+                            :num_reqs, :num_spec_tokens
+                        ].fill_(float("nan"))
             self.draft_token_ids_event.record()
 
     def take_draft_token_ids(self) -> DraftTokenIds | None:
         out = super().take_draft_token_ids()
         draft_widths = (
             [len(token_ids) for token_ids in out.draft_token_ids]
+            if self._spec_k_enabled and out is not None
+            else []
+        )
+        all_draft_token_ids = (
+            [list(token_ids) for token_ids in out.draft_token_ids]
             if self._spec_k_enabled and out is not None
             else []
         )
@@ -2041,6 +2102,24 @@ class NPUModelRunner(GPUModelRunner):
             if draft_top_ks_cpu is None:
                 raise RuntimeError(
                     "Spec-K draft top-k buffer is not initialized."
+                )
+            entropy_diagnostics = getattr(
+                self, "_spec_k_entropy_diagnostics", None
+            )
+            if entropy_diagnostics is not None:
+                draft_entropies_cpu = self._spec_k_draft_entropies_cpu
+                if draft_entropies_cpu is None:
+                    raise RuntimeError(
+                        "Spec-K draft entropy buffer is not initialized."
+                    )
+                entropy_diagnostics.record_step(
+                    req_ids=out.req_ids,
+                    draft_token_ids=all_draft_token_ids,
+                    entropies=draft_entropies_cpu,
+                    top_ks=draft_top_ks_cpu,
+                    selected_lengths=[
+                        len(token_ids) for token_ids in out.draft_token_ids
+                    ],
                 )
             for row, (req_id, token_ids) in enumerate(
                 zip(out.req_ids, out.draft_token_ids)
@@ -2600,6 +2679,7 @@ class NPUModelRunner(GPUModelRunner):
             if early_pp_padded_drafter:
                 self._draft_token_ids = None
                 self._spec_k_draft_top_ks = None
+                self._spec_k_draft_entropies = None
                 self._draft_token_req_ids = None
                 with record_function_or_nullcontext("draft_token"):
                     propose_draft_token_ids(sampler_output.sampled_token_ids)
@@ -2630,6 +2710,7 @@ class NPUModelRunner(GPUModelRunner):
                 if not early_pp_padded_drafter:
                     self._draft_token_ids = None
                     self._spec_k_draft_top_ks = None
+                    self._spec_k_draft_entropies = None
                     self._draft_token_req_ids = None
                 if use_padded_batch and not early_pp_padded_drafter:
                     # EAGLE speculative decoding can use the GPU sampled tokens

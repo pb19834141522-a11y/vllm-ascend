@@ -829,6 +829,14 @@ class TestNPUModelRunnerOutputTokenIds(unittest.TestCase):
             ],
             dtype=torch.int32,
         )
+        runner._spec_k_draft_entropies_cpu = torch.tensor(
+            [
+                [0.1, 0.2, 0.3],
+                [0.4, 0.5, 0.6],
+            ],
+            dtype=torch.float32,
+        )
+        runner._spec_k_entropy_diagnostics = MagicMock()
         runner.num_spec_tokens = 3
         runner.drafter = SimpleNamespace(
             dynamic_spec=SimpleNamespace(
@@ -859,6 +867,12 @@ class TestNPUModelRunnerOutputTokenIds(unittest.TestCase):
             runner._spec_k_request_states["req1"].pending_draft_top_ks.tolist(),
             [7, 6, 5, 4],
         )
+        diagnostics_call = runner._spec_k_entropy_diagnostics.record_step.call_args
+        self.assertEqual(
+            diagnostics_call.kwargs["draft_token_ids"],
+            [[101, 102, 103], [201, 202, 203]],
+        )
+        self.assertEqual(diagnostics_call.kwargs["selected_lengths"], [1, 3])
 
 
 class TestNPUModelRunnerDebugger(unittest.TestCase):

@@ -86,6 +86,13 @@ For a target model whose normal expert top-k is `K`, providing `M < K` non-incre
 
 The optional `full_top_k_layer_range` is a Python-style slice of MoE layer indices that must always use full top-k. `apply_last_token` applies the mean proposal budget, rounded down, to the bonus-token position after the draft sequence instead of full top-k.
 
+For threshold calibration, set `entropy_diagnostics_dir` inside `spec_k_config`. TP rank zero in every DP replica then writes one `spec_k_entropy_*.jsonl` file containing every proposed draft token's entropy, PPL, selected expert budget, and whether dynamic speculative decoding retained it for target verification. This diagnostic mode flushes data every decode step and should not be used for final throughput measurements. Candidate thresholds can be replayed without another inference run:
+
+```shell
+python tools/analyze_spec_k_entropy.py /path/to/entropy-output \
+  --thresholds 128,38,38,11.8311808
+```
+
 Spec-K can be combined with DFlash confidence-based dynamic speculative decoding. `dynamic_spec_config` selects how many draft tokens are verified, while `spec_k_config` independently selects the target MoE expert budget for those tokens.
 
 ## Speculating by matching n-grams in the prompt
