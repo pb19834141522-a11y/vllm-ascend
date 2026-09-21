@@ -222,6 +222,15 @@ PerLayerAttnMetadata: TypeAlias = list[AttnMetadataDict] | AttnMetadataDict
 SEQ_LEN_WITH_MAX_PA_WORKSPACE = 6144
 
 
+@dataclass(slots=True)
+class _AsyncSpecKStep:
+    """Host metadata for one in-flight asynchronous Spec-K step."""
+
+    req_ids: list[str]
+    num_scheduled_tokens: list[int]
+    total_num_scheduled_tokens: int
+
+
 @dataclass
 class GraphCaptureContext:
     stream: torch.npu.Stream
@@ -342,6 +351,10 @@ class NPUModelRunner(GPUModelRunner):
         self._spec_k_draft_top_ks_cpu: torch.Tensor | None = None
         self._spec_k_input_top_ks: CpuGpuBuffer | None = None
         self._spec_k_draft_top_ks: torch.Tensor | None = None
+        self._spec_k_async_input_top_ks_cpu: torch.Tensor | None = None
+        self._spec_k_async_next_top_ks_cpu: torch.Tensor | None = None
+        self._spec_k_async_valid_counts_cpu: torch.Tensor | None = None
+        self._spec_k_async_pending_step: _AsyncSpecKStep | None = None
         # Accuracy-run telemetry. Counters are process-local and cumulative;
         # the evaluator takes a before/after window and aggregates DP ranks.
         self._spec_k_finished_top_k_sum = 0
@@ -781,6 +794,33 @@ class NPUModelRunner(GPUModelRunner):
             device="cpu",
             pin_memory=self.pin_memory,
         )
+        if self.use_async_scheduling:
+            # The target forward consumes token_top_ks directly on NPU.  These
+            # pinned mirrors are only for deferred request-history accounting
+            # and benchmark metrics; they are never copied back to drive MoE
+            # routing on the critical path.
+            self._spec_k_async_input_top_ks_cpu = torch.empty(
+                self.max_num_tokens,
+                dtype=torch.int32,
+                device="cpu",
+                pin_memory=self.pin_memory,
+            )
+            self._spec_k_async_next_top_ks_cpu = torch.empty(
+                self.max_num_reqs,
+                dtype=torch.int32,
+                device="cpu",
+                pin_memory=self.pin_memory,
+            )
+            self._spec_k_async_valid_counts_cpu = torch.empty(
+                self.max_num_reqs,
+                dtype=torch.int64,
+                device="cpu",
+                pin_memory=self.pin_memory,
+            )
+            logger.info_once(
+                "Asynchronous Spec-K NPU budget path is enabled; CPU mirrors "
+                "are used only for deferred metrics and request history."
+            )
 
     def _get_or_create_spec_k_state(self, req_id: str) -> SpecKRequestState:
         state = self._spec_k_request_states.get(req_id)
@@ -819,7 +859,8 @@ class NPUModelRunner(GPUModelRunner):
                 continue
             request = self.requests[req_id]
             state = self._get_or_create_spec_k_state(req_id)
-            state.reconcile_output_length(len(request.output_token_ids))
+            if not self.use_async_scheduling:
+                state.reconcile_output_length(len(request.output_token_ids))
             output[offset:end].copy_(
                 state.top_ks_for_positions(
                     positions[offset:end],
@@ -832,11 +873,197 @@ class NPUModelRunner(GPUModelRunner):
                 )
             )
             offset = end
-        # Count every token row actually submitted to the target. This is the
-        # Target Avg Top-K compute scope, including rejected draft positions.
-        self._spec_k_target_top_k_sum += int(output.sum().item())
-        self._spec_k_target_token_count += total_num_scheduled_tokens
         self._spec_k_input_top_ks.copy_to_gpu(total_num_scheduled_tokens)
+        if self.use_async_scheduling:
+            self._apply_async_spec_k_input_top_ks(
+                scheduler_output,
+                num_scheduled_tokens,
+            )
+        else:
+            # Count every token row actually submitted to the target. This is
+            # the Target Avg Top-K compute scope, including rejected drafts.
+            self._spec_k_target_top_k_sum += int(output.sum().item())
+            self._spec_k_target_token_count += total_num_scheduled_tokens
+
+    def _apply_async_spec_k_input_top_ks(
+        self,
+        scheduler_output: "SchedulerOutput",
+        num_scheduled_tokens: np.ndarray,
+    ) -> None:
+        """Overlay prior-step draft budgets on the current NPU input buffer.
+
+        Async scheduling leaves draft token IDs on device and represents them
+        with scheduler-side placeholders.  Spec-K follows the same lifetime:
+        ``_spec_k_draft_top_ks`` is kept on NPU after step N and remapped by
+        request identity onto the target rows verified in step N+1.
+        """
+        draft_top_ks = self._spec_k_draft_top_ks
+        if not torch.is_tensor(draft_top_ks):
+            return
+        input_top_ks = self._spec_k_input_top_ks
+        if input_top_ks is None:
+            raise RuntimeError("Spec-K input buffer is not initialized.")
+
+        scheduled_drafts = scheduler_output.scheduled_spec_decode_tokens
+        prev_req_id_to_index = self.input_batch.prev_req_id_to_index
+        if not scheduled_drafts or not prev_req_id_to_index:
+            return
+
+        destination_indices: list[int] = []
+        previous_rows: list[int] = []
+        draft_positions: list[int] = []
+        offset = 0
+        max_budget_positions = draft_top_ks.shape[1]
+        for req_index, req_id in enumerate(self.input_batch.req_ids):
+            count = int(num_scheduled_tokens[req_index])
+            draft_len = len(scheduled_drafts.get(req_id, ()))
+            prev_row = prev_req_id_to_index.get(req_id)
+            if draft_len and prev_row is not None:
+                num_budget_positions = min(
+                    draft_len + 1,
+                    count,
+                    max_budget_positions,
+                )
+                # The speculative span is the final ``draft_len + 1`` rows of
+                # this request: anchor/current token followed by draft tokens.
+                destination_start = offset + count - num_budget_positions
+                destination_indices.extend(
+                    range(
+                        destination_start,
+                        destination_start + num_budget_positions,
+                    )
+                )
+                previous_rows.extend([prev_row] * num_budget_positions)
+                draft_positions.extend(range(num_budget_positions))
+            offset += count
+
+        if not destination_indices:
+            return
+
+        destination = torch.tensor(
+            destination_indices,
+            dtype=torch.int64,
+            device=self.device,
+        )
+        source_rows = torch.tensor(
+            previous_rows,
+            dtype=torch.int64,
+            device=self.device,
+        )
+        source_positions = torch.tensor(
+            draft_positions,
+            dtype=torch.int64,
+            device=self.device,
+        )
+        budgets = draft_top_ks[source_rows, source_positions].to(torch.int32)
+        input_top_ks.gpu.index_copy_(0, destination, budgets)
+
+    def _stage_async_spec_k_step(
+        self,
+        scheduler_output: "SchedulerOutput",
+        valid_sampled_token_counts: torch.Tensor,
+        next_draft_top_ks: torch.Tensor,
+    ) -> None:
+        """Mirror async Spec-K bookkeeping to pinned CPU without routing on it."""
+        if self._spec_k_async_pending_step is not None:
+            raise RuntimeError(
+                "Previous asynchronous Spec-K step was not consumed before "
+                "staging the next step."
+            )
+        input_top_ks = self._spec_k_input_top_ks
+        input_top_ks_cpu = self._spec_k_async_input_top_ks_cpu
+        next_top_ks_cpu = self._spec_k_async_next_top_ks_cpu
+        valid_counts_cpu = self._spec_k_async_valid_counts_cpu
+        if (
+            input_top_ks is None
+            or input_top_ks_cpu is None
+            or next_top_ks_cpu is None
+            or valid_counts_cpu is None
+        ):
+            raise RuntimeError("Asynchronous Spec-K buffers are not initialized.")
+        if self.draft_token_ids_copy_stream is None or self.draft_token_ids_event is None:
+            raise RuntimeError("Asynchronous draft copy resources are not initialized.")
+
+        req_ids = self.input_batch.req_ids.copy()
+        num_reqs = len(req_ids)
+        total_num_scheduled_tokens = scheduler_output.total_num_scheduled_tokens
+        num_scheduled_tokens = [
+            int(scheduler_output.num_scheduled_tokens[req_id])
+            for req_id in req_ids
+        ]
+        default_stream = torch.npu.current_stream()
+        with torch.npu.stream(self.draft_token_ids_copy_stream):
+            self.draft_token_ids_copy_stream.wait_stream(default_stream)
+            input_top_ks_cpu[:total_num_scheduled_tokens].copy_(
+                input_top_ks.gpu[:total_num_scheduled_tokens],
+                non_blocking=True,
+            )
+            next_top_ks_cpu[:num_reqs].copy_(
+                next_draft_top_ks[:num_reqs, 0],
+                non_blocking=True,
+            )
+            valid_counts_cpu[:num_reqs].copy_(
+                valid_sampled_token_counts[:num_reqs],
+                non_blocking=True,
+            )
+            self.draft_token_ids_event.record()
+
+        self._spec_k_async_pending_step = _AsyncSpecKStep(
+            req_ids=req_ids,
+            num_scheduled_tokens=num_scheduled_tokens,
+            total_num_scheduled_tokens=total_num_scheduled_tokens,
+        )
+
+    def _consume_async_spec_k_step(self) -> None:
+        """Commit the prior async step's history and exact benchmark counters."""
+        pending = self._spec_k_async_pending_step
+        if pending is None:
+            return
+        input_top_ks_cpu = self._spec_k_async_input_top_ks_cpu
+        next_top_ks_cpu = self._spec_k_async_next_top_ks_cpu
+        valid_counts_cpu = self._spec_k_async_valid_counts_cpu
+        if (
+            input_top_ks_cpu is None
+            or next_top_ks_cpu is None
+            or valid_counts_cpu is None
+            or self.draft_token_ids_event is None
+        ):
+            raise RuntimeError("Asynchronous Spec-K buffers are not initialized.")
+
+        self.draft_token_ids_event.synchronize()
+        target_top_ks = input_top_ks_cpu[: pending.total_num_scheduled_tokens]
+        self._spec_k_target_top_k_sum += int(target_top_ks.sum().item())
+        self._spec_k_target_token_count += pending.total_num_scheduled_tokens
+
+        offset = 0
+        for row, (req_id, target_count) in enumerate(
+            zip(pending.req_ids, pending.num_scheduled_tokens)
+        ):
+            sampled_count = int(valid_counts_cpu[row].item())
+            if sampled_count > target_count:
+                raise RuntimeError(
+                    "Asynchronous Spec-K sampled-token count exceeds its "
+                    f"target span for request {req_id!r}: "
+                    f"{sampled_count} > {target_count}."
+                )
+            if sampled_count > 0:
+                num_accepted_drafts = sampled_count - 1
+                accepted_top_ks = input_top_ks_cpu[
+                    offset + 1 : offset + 1 + num_accepted_drafts
+                ].clone()
+                state = self._get_or_create_spec_k_state(req_id)
+                state.finalize_step(
+                    SpecKHistoryUpdate(
+                        new_output_length=(
+                            state.output_top_ks.shape[0] + sampled_count
+                        ),
+                        accepted_top_ks=accepted_top_ks,
+                    ),
+                    next_top_ks_cpu[row],
+                )
+            offset += target_count
+
+        self._spec_k_async_pending_step = None
 
     def _stage_spec_k_history_updates(
         self,
@@ -1016,12 +1243,13 @@ class NPUModelRunner(GPUModelRunner):
                     ),
                     self._spec_k_finished_request_count,
                 )
-            for req_id, request in self.requests.items():
-                state = self._spec_k_request_states.get(req_id)
-                if state is not None:
-                    state.reconcile_output_length(
-                        len(request.output_token_ids)
-                    )
+            if not self.use_async_scheduling:
+                for req_id, request in self.requests.items():
+                    state = self._spec_k_request_states.get(req_id)
+                    if state is not None:
+                        state.reconcile_output_length(
+                            len(request.output_token_ids)
+                        )
         return deferred_corrections
 
     def _pad_query_start_loc_for_fia(
@@ -1718,6 +1946,7 @@ class NPUModelRunner(GPUModelRunner):
     ) -> list[list[int]] | None:
         self._log_propose_draft_token_ids_entry(spec_decode_metadata, num_scheduled_tokens)
         draft_token_top_ks = None
+        valid_sampled_tokens_count = None
         if not self.drafter:
             # Speculative decoding is not enabled.
             draft_token_ids = None
@@ -1943,6 +2172,21 @@ class NPUModelRunner(GPUModelRunner):
             raise ValueError(f"Unknown speculative decoding method: {self.speculative_config.method}")
 
         self._spec_k_draft_top_ks = draft_token_top_ks
+        if self._spec_k_enabled and self.use_async_scheduling:
+            if not torch.is_tensor(valid_sampled_tokens_count):
+                raise RuntimeError(
+                    "Asynchronous Spec-K requires device-side valid sampled "
+                    "token counts from the padded DSpark proposer."
+                )
+            if not torch.is_tensor(draft_token_top_ks):
+                raise RuntimeError(
+                    "Asynchronous Spec-K requires device-side draft top-k values."
+                )
+            self._stage_async_spec_k_step(
+                scheduler_output,
+                valid_sampled_tokens_count,
+                draft_token_top_ks,
+            )
         return draft_token_ids
 
     def _log_propose_draft_token_ids_entry(
@@ -1987,6 +2231,8 @@ class NPUModelRunner(GPUModelRunner):
     ) -> None:
         if not self.num_spec_tokens:
             return
+        if torch.is_tensor(self._draft_token_ids):
+            self.prev_num_spec_tokens = self._draft_token_ids.shape[1]
         if self.use_async_scheduling and not (
             scheduler_output.has_structured_output_requests
             or self.input_batch.sampling_metadata.output_token_ids
@@ -1998,6 +2244,7 @@ class NPUModelRunner(GPUModelRunner):
         draft_token_ids: torch.Tensor = self._draft_token_ids  # type: ignore[has-type]
         if not torch.is_tensor(draft_token_ids):
             return
+        num_spec_tokens = draft_token_ids.shape[1]
         draft_token_top_ks = self._spec_k_draft_top_ks
         if self._spec_k_enabled and not torch.is_tensor(draft_token_top_ks):
             raise RuntimeError("Spec-K draft top-k values were not produced.")
@@ -2146,6 +2393,8 @@ class NPUModelRunner(GPUModelRunner):
         num_scheduled_tokens = scheduler_output.total_num_scheduled_tokens
         with record_function_or_nullcontext("prepare input"):
             with self.synchronize_input_prep():
+                if self._spec_k_enabled and self.use_async_scheduling:
+                    self._consume_async_spec_k_step()
                 # Fix up prev_req_id_to_index for requests that were discarded
                 # in the previous sample_tokens step. If a request has
                 # prev_num_draft_len > 0 but is missing from
@@ -3132,6 +3381,13 @@ class NPUModelRunner(GPUModelRunner):
         Still best effort: the collector also flushes periodically during the run,
         which is what actually guarantees an artifact exists.
         """
+        if self._spec_k_enabled and self.use_async_scheduling:
+            try:
+                self._consume_async_spec_k_step()
+            except Exception:
+                logger.exception(
+                    "Failed to flush the final asynchronous Spec-K step"
+                )
         logger.info("[DECODE-STATS] model runner shutdown: flushing statistics")
         stats = get_decode_stats()
         if stats is not None:

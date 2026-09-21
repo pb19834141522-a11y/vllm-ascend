@@ -19,7 +19,10 @@ from vllm_ascend.attention.utils import get_sfa_qsfa_packed_head_dim
 from vllm_ascend.core.kv_cache_interface import AscendMLAAttentionSpec, AscendSFAIndexerCacheSpec
 from vllm_ascend.spec_decode.spec_k import SpecKHistoryUpdate
 from vllm_ascend.utils import AscendDeviceType
-from vllm_ascend.worker.model_runner_v1 import NPUModelRunner
+from vllm_ascend.worker.model_runner_v1 import (
+    NPUModelRunner,
+    _AsyncSpecKStep,
+)
 
 
 class TestDSparkAuxCaptureMode(unittest.TestCase):
@@ -816,6 +819,98 @@ class TestNPUModelRunnerOutputTokenIds(unittest.TestCase):
         self.assertEqual(req1_state.output_top_ks.tolist(), [8])
         self.assertIsNone(req1_state.pending_draft_top_ks)
         self.assertFalse(runner._spec_k_history_updates)
+
+    def test_async_spec_k_remaps_npu_budgets_after_request_reordering(self):
+        runner = self._build_runner()
+        runner._spec_k_enabled = True
+        runner.use_async_scheduling = True
+        runner._spec_k_policy = SimpleNamespace(base_top_k=6)
+        runner._spec_k_request_states = {}
+        runner._spec_k_target_top_k_sum = 0
+        runner._spec_k_target_token_count = 0
+        runner.input_batch = SimpleNamespace(
+            req_ids=["req1", "req0"],
+            prev_req_id_to_index={"req0": 0, "req1": 1},
+            num_tokens_no_spec=np.array([1, 1], dtype=np.int32),
+        )
+        runner.requests = {
+            "req0": SimpleNamespace(num_prompt_tokens=100, output_token_ids=[]),
+            "req1": SimpleNamespace(num_prompt_tokens=100, output_token_ids=[]),
+        }
+        cpu = torch.empty(8, dtype=torch.int32)
+        gpu = torch.empty(8, dtype=torch.int32)
+        runner._spec_k_input_top_ks = SimpleNamespace(
+            cpu=cpu,
+            gpu=gpu,
+            copy_to_gpu=lambda size: gpu[:size].copy_(cpu[:size]),
+        )
+        runner._spec_k_draft_top_ks = torch.tensor(
+            [
+                [3, 4, 5, 6],
+                [2, 2, 4, 6],
+            ],
+            dtype=torch.int32,
+        )
+        scheduler_output = SimpleNamespace(
+            scheduled_spec_decode_tokens={
+                "req1": [-1, -1, -1],
+                "req0": [-1, -1, -1],
+            }
+        )
+
+        runner._prepare_spec_k_input_top_ks(
+            scheduler_output,
+            positions=np.arange(8, dtype=np.int64),
+            num_scheduled_tokens=np.array([4, 4], dtype=np.int32),
+            total_num_scheduled_tokens=8,
+        )
+
+        self.assertEqual(
+            gpu.tolist(),
+            [2, 2, 4, 6, 3, 4, 5, 6],
+        )
+        # Async counters are committed from the exact deferred NPU mirror.
+        self.assertEqual(runner._spec_k_target_token_count, 0)
+
+    def test_async_spec_k_consumes_exact_target_and_output_budgets(self):
+        runner = self._build_runner()
+        runner._spec_k_policy = SimpleNamespace(base_top_k=6)
+        runner._spec_k_request_states = {}
+        runner._spec_k_target_top_k_sum = 0
+        runner._spec_k_target_token_count = 0
+        runner._spec_k_async_input_top_ks_cpu = torch.tensor(
+            [6, 3, 4, 6, 6, 2, 5, 6],
+            dtype=torch.int32,
+        )
+        runner._spec_k_async_next_top_ks_cpu = torch.tensor(
+            [5, 4],
+            dtype=torch.int32,
+        )
+        runner._spec_k_async_valid_counts_cpu = torch.tensor(
+            [3, 1],
+            dtype=torch.int64,
+        )
+        runner._spec_k_async_pending_step = _AsyncSpecKStep(
+            req_ids=["req0", "req1"],
+            num_scheduled_tokens=[4, 4],
+            total_num_scheduled_tokens=8,
+        )
+        runner.draft_token_ids_event = MagicMock()
+
+        runner._consume_async_spec_k_step()
+
+        runner.draft_token_ids_event.synchronize.assert_called_once_with()
+        self.assertEqual(runner._spec_k_target_top_k_sum, 38)
+        self.assertEqual(runner._spec_k_target_token_count, 8)
+        self.assertEqual(
+            runner._spec_k_request_states["req0"].output_top_ks.tolist(),
+            [3, 4, 5],
+        )
+        self.assertEqual(
+            runner._spec_k_request_states["req1"].output_top_ks.tolist(),
+            [4],
+        )
+        self.assertIsNone(runner._spec_k_async_pending_step)
 
 
 class TestNPUModelRunnerDebugger(unittest.TestCase):

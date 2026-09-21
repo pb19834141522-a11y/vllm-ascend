@@ -132,6 +132,15 @@ def test_spec_k_config_accepts_ascend_quantized_target():
     assert config.enabled
 
 
+def test_spec_k_config_accepts_async_scheduler_for_supported_runner_path():
+    config = SpecKConfig(
+        {"enabled": True, "ppl_thresholds": [2.0]},
+        _vllm_config(method="dspark", async_scheduling=True),
+    )
+
+    assert config.enabled
+
+
 def test_spec_k_config_rejects_other_quantized_target():
     with pytest.raises(ValueError, match="Ascend-quantized"):
         SpecKConfig(

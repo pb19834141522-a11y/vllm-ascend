@@ -113,6 +113,20 @@ class AscendConfig:
             additional_config.get("spec_k_config", {}),
             vllm_config,
         )
+        if self.spec_k_config.enabled and vllm_config.scheduler_config.async_scheduling:
+            speculative_config = vllm_config.speculative_config
+            assert speculative_config is not None
+            if speculative_config.method != "dspark":
+                raise ValueError(
+                    "Asynchronous Spec-K currently supports only fixed-length "
+                    "DSpark speculative decoding."
+                )
+            if self.dynamic_spec_config.method is not None:
+                raise ValueError(
+                    "Asynchronous Spec-K requires dynamic speculative length "
+                    "to be disabled. Remove dynamic_spec_config or use "
+                    "--no-async-scheduling."
+                )
         if self.spec_k_config.enabled and (
             self.eplb_config.dynamic_eplb
             or self.eplb_config.expert_map_path is not None
@@ -637,8 +651,6 @@ class SpecKConfig:
             raise ValueError(
                 "Spec-K only supports unquantized or Ascend-quantized target models."
             )
-        if vllm_config.scheduler_config.async_scheduling:
-            raise ValueError("Spec-K does not yet support async scheduling.")
         if vllm_config.cache_config.enable_prefix_caching:
             raise ValueError("Spec-K does not yet support prefix caching.")
         if getattr(vllm_config, "use_v2_model_runner", False):

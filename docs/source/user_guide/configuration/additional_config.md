@@ -195,6 +195,9 @@ The legacy top-level `enable_balance_scheduling`, `recompute_scheduler_enable`, 
 
 Spec-K uses the draft model's distribution perplexity to select a per-token expert budget for the target MoE model. The policy is fixed for the lifetime of the engine and applies to every request.
 
+Asynchronous scheduling is supported for fixed-length DSpark only. Do not set
+`dynamic_spec_config.method` when combining Spec-K with asynchronous scheduling.
+
 | Name | Type | Default | Description |
 | ---- | ---- | ------- | ----------- |
 | `enabled` | bool | `False` | Whether to enable Spec-K. |
