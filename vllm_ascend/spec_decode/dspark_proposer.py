@@ -84,6 +84,10 @@ class AscendDSparkProposer(AscendDflashProposer):
         )
         dynamic_spec_config = get_ascend_config().dynamic_spec_config
         self.dynamic_spec = None
+        # Populated only while lossless Spec-K entropy diagnostics are enabled.
+        # Keeping the reduced [batch, draft_position] tensor avoids retaining
+        # another full [batch, draft_position, vocabulary] logits copy.
+        self._last_dspark_raw_entropies: torch.Tensor | None = None
 
         if dynamic_spec_config.method == "dspark":
             self.dynamic_spec = DynamicSpecScheduler(
@@ -139,6 +143,12 @@ class AscendDSparkProposer(AscendDflashProposer):
 
         # per-layer context slot mappings as a flat list
         self._context_slot_mapping_buffers: list[torch.Tensor | None] | None = None
+
+    def take_last_dspark_raw_entropies(self) -> torch.Tensor | None:
+        """Return and clear entropy measured before DSpark Markov correction."""
+        entropies = self._last_dspark_raw_entropies
+        self._last_dspark_raw_entropies = None
+        return entropies
 
     def _compute_confidence_logits(
         self,

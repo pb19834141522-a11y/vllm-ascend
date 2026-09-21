@@ -36,6 +36,18 @@ class SpecKPolicy:
         self._log_perplexity_boundaries = torch.tensor(thresholds[::-1], dtype=torch.float32, device=device).log_()
 
     def top_ks_from_logits(self, logits: torch.Tensor) -> torch.Tensor:
+        top_ks, _ = self.top_ks_and_entropy_from_logits(logits)
+        return top_ks
+
+    def top_ks_and_entropy_from_logits(
+        self, logits: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return expert budgets and the unrounded entropy behind each budget.
+
+        Entropy is returned in natural-log units with shape ``[B, S]``. Keeping
+        it separate from the integer budgets lets opt-in diagnostics persist
+        the complete distribution and replay different PPL thresholds later.
+        """
         if logits.ndim != 3:
             raise ValueError(f"Spec-K logits must have shape [B, S, V], got {logits.shape}.")
 
@@ -55,7 +67,8 @@ class SpecKPolicy:
                 device=logits.device,
             )
 
-        return torch.cat((token_top_ks, last_top_k[:, None]), dim=1).contiguous()
+        top_ks = torch.cat((token_top_ks, last_top_k[:, None]), dim=1).contiguous()
+        return top_ks, entropy.contiguous()
 
 
 @dataclass(frozen=True, slots=True)

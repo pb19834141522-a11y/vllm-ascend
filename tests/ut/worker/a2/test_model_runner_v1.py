@@ -890,10 +890,28 @@ class TestNPUModelRunnerOutputTokenIds(unittest.TestCase):
             [3, 1],
             dtype=torch.int64,
         )
+        runner._spec_k_entropy_diagnostics = MagicMock()
+        runner._spec_k_draft_token_ids_cpu = torch.tensor(
+            [[101, 102, 103], [201, 202, 203]],
+            dtype=torch.int64,
+        )
+        runner._spec_k_draft_entropies_cpu = torch.tensor(
+            [[0.2, 0.3, 0.4], [0.5, 0.6, 0.7]],
+            dtype=torch.float32,
+        )
+        runner._spec_k_raw_draft_entropies_cpu = torch.tensor(
+            [[0.7, 0.8, 0.9], [1.0, 1.1, 1.2]],
+            dtype=torch.float32,
+        )
+        runner._spec_k_draft_top_ks_cpu = torch.tensor(
+            [[3, 4, 5, 6], [2, 2, 4, 6]],
+            dtype=torch.int32,
+        )
         runner._spec_k_async_pending_step = _AsyncSpecKStep(
             req_ids=["req0", "req1"],
             num_scheduled_tokens=[4, 4],
             total_num_scheduled_tokens=8,
+            draft_width=3,
         )
         runner.draft_token_ids_event = MagicMock()
 
@@ -909,6 +927,18 @@ class TestNPUModelRunnerOutputTokenIds(unittest.TestCase):
         self.assertEqual(
             runner._spec_k_request_states["req1"].output_top_ks.tolist(),
             [4],
+        )
+        diagnostics_call = runner._spec_k_entropy_diagnostics.record_step.call_args
+        self.assertEqual(
+            diagnostics_call.kwargs["draft_token_ids"],
+            [[101, 102, 103], [201, 202, 203]],
+        )
+        self.assertEqual(diagnostics_call.kwargs["selected_lengths"], [3, 3])
+        self.assertTrue(
+            torch.equal(
+                diagnostics_call.kwargs["raw_entropies"],
+                runner._spec_k_raw_draft_entropies_cpu,
+            )
         )
         self.assertIsNone(runner._spec_k_async_pending_step)
 

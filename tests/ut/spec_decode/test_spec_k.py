@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 from types import SimpleNamespace
 
 import numpy as np
@@ -12,6 +13,7 @@ from vllm_ascend.spec_decode.spec_k import (
     SpecKPolicy,
     SpecKRequestState,
 )
+from vllm_ascend.spec_decode.spec_k_diagnostics import SpecKEntropyDiagnostics
 
 
 def _vllm_config(
@@ -53,6 +55,8 @@ def test_spec_k_config_parses_engine_global_policy():
             "ppl_thresholds": [3.0, 2.0],
             "full_top_k_layer_range": [1, 5, 2],
             "apply_last_token": True,
+            "entropy_diagnostics_dir": "/tmp/spec-k-entropy",
+            "entropy_diagnostics_log_interval": 123,
         },
         _vllm_config(),
     )
@@ -61,6 +65,8 @@ def test_spec_k_config_parses_engine_global_policy():
     assert config.ppl_thresholds == (3.0, 2.0)
     assert config.full_top_k_layer_range == (1, 5, 2)
     assert config.apply_last_token
+    assert config.entropy_diagnostics_dir == "/tmp/spec-k-entropy"
+    assert config.entropy_diagnostics_log_interval == 123
 
 
 @pytest.mark.parametrize(
@@ -86,6 +92,22 @@ def test_spec_k_config_parses_engine_global_policy():
         (
             {"enabled": True, "ppl_thresholds": ["2.0"]},
             "list of numbers",
+        ),
+        (
+            {
+                "enabled": True,
+                "ppl_thresholds": [2.0],
+                "entropy_diagnostics_dir": "",
+            },
+            "non-empty string",
+        ),
+        (
+            {
+                "enabled": True,
+                "ppl_thresholds": [2.0],
+                "entropy_diagnostics_log_interval": 0,
+            },
+            "positive integer",
         ),
     ],
 )
@@ -194,6 +216,71 @@ def test_policy_handles_sparse_vocabulary_logits():
 
     assert top_ks.tolist() == [[3, 4]]
     assert torch.equal(logits, original_logits)
+
+
+def test_policy_exposes_complete_entropy_without_changing_top_ks():
+    policy = SpecKPolicy(
+        _policy_config(),
+        base_top_k=4,
+        device=torch.device("cpu"),
+    )
+    logits = torch.tensor(
+        [[[10.0, -10.0, -10.0, -10.0], [0.0, 0.0, 0.0, 0.0]]]
+    )
+
+    top_ks, entropy = policy.top_ks_and_entropy_from_logits(logits)
+
+    assert top_ks.tolist() == [[2, 4, 4]]
+    assert entropy.shape == (1, 2)
+    assert entropy[0, 0].item() == pytest.approx(0.0, abs=1e-6)
+    assert entropy[0, 1].item() == pytest.approx(np.log(4.0), abs=1e-6)
+
+
+def test_entropy_diagnostics_persists_every_token_and_selection(tmp_path):
+    diagnostics = SpecKEntropyDiagnostics(
+        str(tmp_path),
+        dp_rank=2,
+        base_top_k=6,
+        ppl_thresholds=(128.0, 38.0, 38.0, 11.8311808),
+        log_interval=100,
+    )
+
+    diagnostics.record_step(
+        req_ids=["req0", "req1"],
+        draft_token_ids=[[101, 102, 103], [201, 202]],
+        raw_entropies=torch.tensor([[0.5, 1.5, 2.5], [3.5, 4.5, 0.0]]),
+        corrected_entropies=torch.tensor(
+            [[0.0, 1.0, 2.0], [3.0, 4.0, 0.0]]
+        ),
+        top_ks=torch.tensor([[2, 3, 5, 6], [5, 6, 6, 6]]),
+        selected_lengths=[1, 2],
+    )
+    summary = diagnostics.summary()
+    path = diagnostics.path
+    diagnostics.close()
+
+    records = [json.loads(line) for line in path.read_text().splitlines()]
+    token_records = [record for record in records if record["record_type"] == "token"]
+    assert records[0]["record_type"] == "metadata"
+    assert records[0]["ppl_thresholds"] == [128.0, 38.0, 38.0, 11.8311808]
+    assert len(token_records) == 5
+    assert [record["selected_for_verification"] for record in token_records] == [
+        True,
+        False,
+        False,
+        True,
+        True,
+    ]
+    assert token_records[1]["entropy"] == pytest.approx(1.0)
+    assert token_records[1]["ppl"] == pytest.approx(np.e)
+    assert token_records[1]["raw_entropy"] == pytest.approx(1.5)
+    assert token_records[1]["corrected_entropy"] == pytest.approx(1.0)
+    assert token_records[1]["markov_entropy_delta"] == pytest.approx(-0.5)
+    assert token_records[1]["markov_ppl_ratio"] == pytest.approx(np.exp(-0.5))
+    assert summary["proposed_tokens"] == 5
+    assert summary["selected_tokens"] == 3
+    assert summary["markov_lowered_entropy_fraction"] == pytest.approx(0.8)
+    assert summary["expert_budget_counts"] == {2: 1, 3: 1, 5: 2, 6: 1}
 
 
 def test_request_state_restores_history_and_pending_drafts_by_position():

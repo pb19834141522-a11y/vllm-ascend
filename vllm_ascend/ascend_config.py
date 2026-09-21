@@ -554,6 +554,8 @@ class SpecKConfig:
         "ppl_thresholds",
         "full_top_k_layer_range",
         "apply_last_token",
+        "entropy_diagnostics_dir",
+        "entropy_diagnostics_log_interval",
     }
 
     def __init__(self, config: dict[str, Any], vllm_config: "VllmConfig"):
@@ -609,6 +611,31 @@ class SpecKConfig:
         self.apply_last_token = config.get("apply_last_token", False)
         if not isinstance(self.apply_last_token, bool):
             raise ValueError("spec_k_config.apply_last_token must be a bool.")
+
+        entropy_diagnostics_dir = config.get("entropy_diagnostics_dir")
+        if entropy_diagnostics_dir is not None and (
+            not isinstance(entropy_diagnostics_dir, str)
+            or not entropy_diagnostics_dir.strip()
+        ):
+            raise ValueError(
+                "spec_k_config.entropy_diagnostics_dir must be a non-empty "
+                "string or null."
+            )
+        self.entropy_diagnostics_dir = entropy_diagnostics_dir
+
+        entropy_diagnostics_log_interval = config.get(
+            "entropy_diagnostics_log_interval", 10000
+        )
+        if (
+            not isinstance(entropy_diagnostics_log_interval, int)
+            or isinstance(entropy_diagnostics_log_interval, bool)
+            or entropy_diagnostics_log_interval <= 0
+        ):
+            raise ValueError(
+                "spec_k_config.entropy_diagnostics_log_interval must be a "
+                "positive integer."
+            )
+        self.entropy_diagnostics_log_interval = entropy_diagnostics_log_interval
 
         if not self.enabled:
             return

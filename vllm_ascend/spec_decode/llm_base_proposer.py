@@ -1450,6 +1450,24 @@ class AscendSpecDecodeBaseProposer(SpecDecodeBaseProposer):
                     raw_logits = self.model.compute_logits(sample_hidden_states)
                     logits = raw_logits.view(-1, self.num_speculative_tokens, raw_logits.shape[-1])
                     num_blk = logits.shape[0]
+                    entropy_diagnostics_dir = getattr(
+                        ascend_config.spec_k_config,
+                        "entropy_diagnostics_dir",
+                        None,
+                    )
+                    if entropy_diagnostics_dir is not None:
+                        raw_probabilities = torch.softmax(
+                            logits,
+                            dim=-1,
+                            dtype=torch.float32,
+                        )
+                        self._last_dspark_raw_entropies = (
+                            -torch.xlogy(raw_probabilities, raw_probabilities)
+                            .sum(dim=-1)
+                            .contiguous()
+                        )
+                    else:
+                        self._last_dspark_raw_entropies = None
                     draft_token_ids = self._dspark_draft_buffer[:num_blk]
                     draft_token_ids[:, 0].copy_(self._dspark_seed_buffer[:num_blk])
                     for idx in range(self.num_speculative_tokens):

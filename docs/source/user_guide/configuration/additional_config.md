@@ -204,6 +204,8 @@ Asynchronous scheduling is supported for fixed-length DSpark only. Do not set
 | `ppl_thresholds` | list[float] | `[]` | Finite, positive, non-increasing perplexity thresholds. For a model top-k of `K` and `M < K` thresholds, the minimum expert budget is `K - M`; crossing a threshold adds one expert. Repeated thresholds add multiple experts at the same boundary. |
 | `full_top_k_layer_range` | list[int] | `[0, 0, 1]` | Two- or three-element Python-style slice selecting MoE layers that always use the model's full top-k. |
 | `apply_last_token` | bool | `False` | Use the mean proposal budget, rounded down, for the bonus-token position after the draft sequence. When disabled, that position uses the full model top-k. |
+| `entropy_diagnostics_dir` | str \| null | `null` | Opt-in directory for lossless per-draft-token JSONL diagnostics. For DSpark, TP rank zero in each DP replica records entropy/PPL before and after Markov-head correction, their delta, expert budget, draft position, token ID, and whether the token was retained for target verification. Other proposers record identical raw/corrected values because they have no DSpark Markov correction. This diagnostic mode performs an extra softmax and JSONL I/O and must not be used for final throughput measurements. |
+| `entropy_diagnostics_log_interval` | int | `10000` | Number of recorded draft tokens between cumulative entropy/expert-budget summaries in the service log. The JSONL file always contains every token regardless of this interval. |
 
 **scheduler_config.short_request_first_config**
 
