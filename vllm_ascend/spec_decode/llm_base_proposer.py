@@ -1455,7 +1455,13 @@ class AscendSpecDecodeBaseProposer(SpecDecodeBaseProposer):
                         "entropy_diagnostics_dir",
                         None,
                     )
-                    if entropy_diagnostics_dir is not None:
+                    # Draft outputs are replicated across tensor-parallel
+                    # ranks. Only TP0 needs the extra full-vocabulary softmax
+                    # used by entropy diagnostics.
+                    if (
+                        entropy_diagnostics_dir is not None
+                        and get_tp_group().rank_in_group == 0
+                    ):
                         raw_probabilities = torch.softmax(
                             logits,
                             dim=-1,

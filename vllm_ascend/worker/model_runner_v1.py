@@ -836,7 +836,7 @@ class NPUModelRunner(GPUModelRunner):
         )
         # Draft outputs are replicated across TP ranks. Only TP0 writes them,
         # while each DP replica keeps its own file.
-        if diagnostics_dir is not None and self.tp_rank == 0:
+        if diagnostics_dir is not None and get_tp_group().rank_in_group == 0:
             self._spec_k_draft_entropies_cpu = torch.empty(
                 (
                     self.max_num_reqs,

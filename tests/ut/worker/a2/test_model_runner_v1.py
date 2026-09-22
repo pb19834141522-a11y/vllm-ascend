@@ -721,7 +721,9 @@ class TestNPUModelRunnerOutputTokenIds(unittest.TestCase):
         runner = self._build_runner()
         runner._spec_k_enabled = True
         runner.pin_memory = False
-        runner._make_buffer = lambda size, dtype: SimpleNamespace(cpu=torch.empty(size, dtype=dtype))
+        runner._make_buffer = lambda size, dtype: SimpleNamespace(
+            cpu=torch.empty(size, dtype=dtype)
+        )
         runner.compilation_config = SimpleNamespace(
             static_all_moe_layers=["moe.0", "moe.1"],
             static_forward_context={
@@ -745,6 +747,47 @@ class TestNPUModelRunnerOutputTokenIds(unittest.TestCase):
         self.assertEqual(runner._spec_k_policy.base_top_k, 4)
         self.assertEqual(runner._spec_k_input_top_ks.cpu.shape, (8,))
         self.assertEqual(runner._spec_k_draft_top_ks_cpu.shape, (2, 4))
+
+    @patch("vllm_ascend.worker.model_runner_v1.SpecKEntropyDiagnostics")
+    @patch("vllm_ascend.worker.model_runner_v1.get_tp_group")
+    def test_spec_k_entropy_diagnostics_uses_distributed_tp_rank(
+        self,
+        mock_get_tp_group,
+        mock_diagnostics,
+    ):
+        runner = self._build_runner()
+        runner._spec_k_enabled = True
+        runner.use_async_scheduling = False
+        runner.pin_memory = False
+        runner.dp_rank = 0
+        runner._make_buffer = lambda size, dtype: SimpleNamespace(cpu=torch.empty(size, dtype=dtype))
+        runner.compilation_config = SimpleNamespace(
+            static_all_moe_layers=["moe.0"],
+            static_forward_context={"moe.0": SimpleNamespace(top_k=4)},
+        )
+        runner.ascend_config = SimpleNamespace(
+            spec_k_config=SimpleNamespace(
+                ppl_thresholds=(3.0, 2.0),
+                full_top_k_layer_range=(0, 0, 1),
+                apply_last_token=False,
+                entropy_diagnostics_dir="/tmp/spec-k-entropy",
+                entropy_diagnostics_log_interval=100,
+            )
+        )
+        runner.max_num_tokens = 8
+        runner.max_num_reqs = 2
+        runner.num_spec_tokens = 3
+        mock_get_tp_group.return_value = SimpleNamespace(rank_in_group=0)
+
+        runner._initialize_spec_k()
+
+        mock_diagnostics.assert_called_once_with(
+            "/tmp/spec-k-entropy",
+            dp_rank=0,
+            base_top_k=4,
+            ppl_thresholds=(3.0, 2.0),
+            log_interval=100,
+        )
 
     def test_spec_k_rejects_dense_target(self):
         runner = self._build_runner()
