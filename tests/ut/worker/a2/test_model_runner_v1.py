@@ -915,6 +915,81 @@ class TestNPUModelRunnerOutputTokenIds(unittest.TestCase):
         # Async counters are committed from the exact deferred NPU mirror.
         self.assertEqual(runner._spec_k_target_token_count, 0)
 
+    def test_async_dynamic_spec_trims_placeholders_by_request_id(self):
+        runner = self._build_runner()
+        runner._spec_k_async_verify_lengths_cpu = torch.tensor(
+            [2, 1], dtype=torch.int32
+        )
+        runner._spec_k_async_pending_step = _AsyncSpecKStep(
+            req_ids=["req0", "req1"],
+            num_scheduled_tokens=[4, 4],
+            total_num_scheduled_tokens=8,
+            draft_width=3,
+            has_dynamic_verify_lengths=True,
+        )
+        runner._spec_k_async_original_num_spec_per_req = {}
+        runner.draft_token_ids_event = MagicMock()
+        scheduler_output = SimpleNamespace(
+            scheduled_cached_reqs=SimpleNamespace(req_ids=["req1", "req0"]),
+            scheduled_spec_decode_tokens={
+                "req1": [-1, -1, -1],
+                "req0": [-1, -1, -1],
+            },
+            num_scheduled_tokens={"req1": 4, "req0": 4},
+            total_num_scheduled_tokens=8,
+        )
+
+        event_synchronized = runner._trim_async_dynamic_spec_tokens(
+            scheduler_output
+        )
+
+        self.assertTrue(event_synchronized)
+        runner.draft_token_ids_event.synchronize.assert_called_once_with()
+        self.assertEqual(scheduler_output.total_num_scheduled_tokens, 5)
+        self.assertEqual(
+            scheduler_output.num_scheduled_tokens,
+            {"req1": 2, "req0": 3},
+        )
+        self.assertEqual(
+            scheduler_output.scheduled_spec_decode_tokens,
+            {"req1": [-1], "req0": [-1, -1]},
+        )
+        self.assertEqual(
+            runner._spec_k_async_original_num_spec_per_req,
+            {"req1": 3, "req0": 3},
+        )
+
+    @patch(
+        "vllm.v1.worker.gpu_model_runner.GPUModelRunner._update_states",
+        return_value=None,
+    )
+    def test_async_dynamic_spec_keeps_optimistic_width_for_correction(
+        self, mock_parent_update_states
+    ):
+        runner = self._build_runner()
+        runner.use_async_scheduling = True
+        runner._spec_k_enabled = False
+        runner._spec_k_async_original_num_spec_per_req = {"req0": 3}
+        runner.requests = {
+            "req0": SimpleNamespace(
+                num_computed_tokens=10,
+                prev_num_draft_len=2,
+            )
+        }
+        runner._apply_pp_sampled_tokens_from_scheduler_output = MagicMock()
+        scheduler_output = SimpleNamespace(
+            scheduled_cached_reqs=SimpleNamespace(
+                req_ids=[],
+                num_computed_tokens=[],
+            )
+        )
+
+        runner._update_states(scheduler_output)
+
+        mock_parent_update_states.assert_called_once_with(scheduler_output)
+        self.assertEqual(runner.requests["req0"].prev_num_draft_len, 3)
+        self.assertFalse(runner._spec_k_async_original_num_spec_per_req)
+
     def test_async_spec_k_consumes_exact_target_and_output_budgets(self):
         runner = self._build_runner()
         runner._spec_k_policy = SimpleNamespace(base_top_k=6)
@@ -932,6 +1007,10 @@ class TestNPUModelRunnerOutputTokenIds(unittest.TestCase):
         runner._spec_k_async_valid_counts_cpu = torch.tensor(
             [3, 1],
             dtype=torch.int64,
+        )
+        runner._spec_k_async_verify_lengths_cpu = torch.tensor(
+            [2, 1],
+            dtype=torch.int32,
         )
         runner._spec_k_entropy_diagnostics = MagicMock()
         runner._spec_k_draft_token_ids_cpu = torch.tensor(
@@ -955,6 +1034,7 @@ class TestNPUModelRunnerOutputTokenIds(unittest.TestCase):
             num_scheduled_tokens=[4, 4],
             total_num_scheduled_tokens=8,
             draft_width=3,
+            has_dynamic_verify_lengths=True,
         )
         runner.draft_token_ids_event = MagicMock()
 
@@ -976,7 +1056,7 @@ class TestNPUModelRunnerOutputTokenIds(unittest.TestCase):
             diagnostics_call.kwargs["draft_token_ids"],
             [[101, 102, 103], [201, 202, 203]],
         )
-        self.assertEqual(diagnostics_call.kwargs["selected_lengths"], [3, 3])
+        self.assertEqual(diagnostics_call.kwargs["selected_lengths"], [2, 1])
         self.assertTrue(
             torch.equal(
                 diagnostics_call.kwargs["raw_entropies"],

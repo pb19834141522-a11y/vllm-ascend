@@ -118,14 +118,13 @@ class AscendConfig:
             assert speculative_config is not None
             if speculative_config.method != "dspark":
                 raise ValueError(
-                    "Asynchronous Spec-K currently supports only fixed-length "
-                    "DSpark speculative decoding."
+                    "Asynchronous Spec-K currently supports only DSpark "
+                    "speculative decoding."
                 )
-            if self.dynamic_spec_config.method is not None:
+            if self.dynamic_spec_config.method not in (None, "dspark"):
                 raise ValueError(
-                    "Asynchronous Spec-K requires dynamic speculative length "
-                    "to be disabled. Remove dynamic_spec_config or use "
-                    "--no-async-scheduling."
+                    "Asynchronous Spec-K supports only DSpark dynamic "
+                    "speculative length."
                 )
         if self.spec_k_config.enabled and (
             self.eplb_config.dynamic_eplb

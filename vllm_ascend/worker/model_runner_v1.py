@@ -231,6 +231,7 @@ class _AsyncSpecKStep:
     num_scheduled_tokens: list[int]
     total_num_scheduled_tokens: int
     draft_width: int
+    has_dynamic_verify_lengths: bool = False
 
 
 @dataclass
@@ -356,7 +357,9 @@ class NPUModelRunner(GPUModelRunner):
         self._spec_k_async_input_top_ks_cpu: torch.Tensor | None = None
         self._spec_k_async_next_top_ks_cpu: torch.Tensor | None = None
         self._spec_k_async_valid_counts_cpu: torch.Tensor | None = None
+        self._spec_k_async_verify_lengths_cpu: torch.Tensor | None = None
         self._spec_k_async_pending_step: _AsyncSpecKStep | None = None
+        self._spec_k_async_original_num_spec_per_req: dict[str, int] = {}
         self._spec_k_draft_entropies_cpu: torch.Tensor | None = None
         self._spec_k_raw_draft_entropies_cpu: torch.Tensor | None = None
         self._spec_k_draft_token_ids_cpu: torch.Tensor | None = None
@@ -825,10 +828,27 @@ class NPUModelRunner(GPUModelRunner):
                 device="cpu",
                 pin_memory=self.pin_memory,
             )
-            logger.info_once(
-                "Asynchronous Spec-K NPU budget path is enabled; CPU mirrors "
-                "are used only for deferred metrics and request history."
+            self._spec_k_async_verify_lengths_cpu = torch.empty(
+                self.max_num_reqs,
+                dtype=torch.int32,
+                device="cpu",
+                pin_memory=self.pin_memory,
             )
+            dynamic_spec_config = getattr(
+                self.ascend_config, "dynamic_spec_config", None
+            )
+            if getattr(dynamic_spec_config, "method", None) == "dspark":
+                logger.info_once(
+                    "Asynchronous dynamic DSpark + Spec-K is enabled; "
+                    "per-request verify lengths and metric mirrors use the "
+                    "deferred draft-copy stream."
+                )
+            else:
+                logger.info_once(
+                    "Asynchronous Spec-K NPU budget path is enabled; CPU "
+                    "mirrors are used only for deferred metrics and request "
+                    "history."
+                )
         diagnostics_dir = getattr(
             self.ascend_config.spec_k_config,
             "entropy_diagnostics_dir",
@@ -1031,11 +1051,13 @@ class NPUModelRunner(GPUModelRunner):
         input_top_ks_cpu = self._spec_k_async_input_top_ks_cpu
         next_top_ks_cpu = self._spec_k_async_next_top_ks_cpu
         valid_counts_cpu = self._spec_k_async_valid_counts_cpu
+        verify_lengths_cpu = self._spec_k_async_verify_lengths_cpu
         if (
             input_top_ks is None
             or input_top_ks_cpu is None
             or next_top_ks_cpu is None
             or valid_counts_cpu is None
+            or verify_lengths_cpu is None
         ):
             raise RuntimeError("Asynchronous Spec-K buffers are not initialized.")
         if self.draft_token_ids_copy_stream is None or self.draft_token_ids_event is None:
@@ -1049,6 +1071,13 @@ class NPUModelRunner(GPUModelRunner):
             int(scheduler_output.num_scheduled_tokens[req_id])
             for req_id in req_ids
         ]
+        dynamic_spec = getattr(getattr(self, "drafter", None), "dynamic_spec", None)
+        verify_lengths = (
+            dynamic_spec.num_verify_tokens
+            if dynamic_spec is not None
+            else None
+        )
+        has_dynamic_verify_lengths = torch.is_tensor(verify_lengths)
         default_stream = torch.npu.current_stream()
         with torch.npu.stream(self.draft_token_ids_copy_stream):
             self.draft_token_ids_copy_stream.wait_stream(default_stream)
@@ -1064,6 +1093,11 @@ class NPUModelRunner(GPUModelRunner):
                 valid_sampled_token_counts[:num_reqs],
                 non_blocking=True,
             )
+            if has_dynamic_verify_lengths:
+                verify_lengths_cpu[:num_reqs].copy_(
+                    verify_lengths[:num_reqs],
+                    non_blocking=True,
+                )
             diagnostics = getattr(self, "_spec_k_entropy_diagnostics", None)
             if diagnostics is not None:
                 corrected_cpu = self._spec_k_draft_entropies_cpu
@@ -1104,9 +1138,60 @@ class NPUModelRunner(GPUModelRunner):
             num_scheduled_tokens=num_scheduled_tokens,
             total_num_scheduled_tokens=total_num_scheduled_tokens,
             draft_width=draft_width,
+            has_dynamic_verify_lengths=has_dynamic_verify_lengths,
         )
 
-    def _consume_async_spec_k_step(self) -> None:
+    def _trim_async_dynamic_spec_tokens(
+        self,
+        scheduler_output: "SchedulerOutput",
+    ) -> bool:
+        """Trim optimistic DSpark placeholders using prior-step NPU budgets.
+
+        The async scheduler always reserves ``num_spec_tokens`` placeholders.
+        Dynamic DSpark computes the actual per-request verification length on
+        NPU in step N.  That small vector is copied to pinned host memory on the
+        existing draft-copy stream and consumed here at the beginning of step
+        N+1.  Only this worker-local scheduler output is shortened; the engine
+        keeps its optimistic placeholder accounting, exactly like vLLM's
+        ``ngram_gpu`` proposer.
+        """
+        pending = self._spec_k_async_pending_step
+        verify_lengths_cpu = self._spec_k_async_verify_lengths_cpu
+        if pending is None or not pending.has_dynamic_verify_lengths:
+            return False
+        if verify_lengths_cpu is None or self.draft_token_ids_event is None:
+            raise RuntimeError(
+                "Asynchronous dynamic-spec length buffers are not initialized."
+            )
+
+        self.draft_token_ids_event.synchronize()
+        pending_rows = {req_id: row for row, req_id in enumerate(pending.req_ids)}
+        scheduled_drafts = scheduler_output.scheduled_spec_decode_tokens
+        original_lengths: dict[str, int] = {}
+
+        for req_id in scheduler_output.scheduled_cached_reqs.req_ids:
+            row = pending_rows.get(req_id)
+            spec_token_ids = scheduled_drafts.get(req_id)
+            if row is None or spec_token_ids is None:
+                continue
+
+            scheduled_k = len(spec_token_ids)
+            valid_k = int(verify_lengths_cpu[row].item())
+            valid_k = max(0, min(valid_k, scheduled_k))
+            original_lengths[req_id] = scheduled_k
+
+            tokens_to_trim = scheduled_k - valid_k
+            scheduler_output.total_num_scheduled_tokens -= tokens_to_trim
+            scheduler_output.num_scheduled_tokens[req_id] -= tokens_to_trim
+            if valid_k == 0:
+                scheduled_drafts.pop(req_id, None)
+            else:
+                scheduled_drafts[req_id] = spec_token_ids[:valid_k]
+
+        self._spec_k_async_original_num_spec_per_req = original_lengths
+        return True
+
+    def _consume_async_spec_k_step(self, event_synchronized: bool = False) -> None:
         """Commit the prior async step's history and exact benchmark counters."""
         pending = self._spec_k_async_pending_step
         if pending is None:
@@ -1114,15 +1199,18 @@ class NPUModelRunner(GPUModelRunner):
         input_top_ks_cpu = self._spec_k_async_input_top_ks_cpu
         next_top_ks_cpu = self._spec_k_async_next_top_ks_cpu
         valid_counts_cpu = self._spec_k_async_valid_counts_cpu
+        verify_lengths_cpu = self._spec_k_async_verify_lengths_cpu
         if (
             input_top_ks_cpu is None
             or next_top_ks_cpu is None
             or valid_counts_cpu is None
+            or verify_lengths_cpu is None
             or self.draft_token_ids_event is None
         ):
             raise RuntimeError("Asynchronous Spec-K buffers are not initialized.")
 
-        self.draft_token_ids_event.synchronize()
+        if not event_synchronized:
+            self.draft_token_ids_event.synchronize()
         diagnostics = getattr(self, "_spec_k_entropy_diagnostics", None)
         if diagnostics is not None:
             width = pending.draft_width
@@ -1139,6 +1227,14 @@ class NPUModelRunner(GPUModelRunner):
                 raise RuntimeError(
                     "DSpark Markov entropy diagnostics buffers are not initialized."
                 )
+            selected_lengths = (
+                [
+                    max(0, min(int(verify_lengths_cpu[row].item()), width))
+                    for row in range(len(pending.req_ids))
+                ]
+                if pending.has_dynamic_verify_lengths
+                else [width] * len(pending.req_ids)
+            )
             diagnostics.record_step(
                 req_ids=pending.req_ids,
                 draft_token_ids=token_ids_cpu[
@@ -1149,7 +1245,7 @@ class NPUModelRunner(GPUModelRunner):
                 ],
                 raw_entropies=raw_cpu[: len(pending.req_ids), :width],
                 top_ks=top_ks_cpu[: len(pending.req_ids), : width + 1],
-                selected_lengths=[width] * len(pending.req_ids),
+                selected_lengths=selected_lengths,
             )
         target_top_ks = input_top_ks_cpu[: pending.total_num_scheduled_tokens]
         self._spec_k_target_top_k_sum += int(target_top_ks.sum().item())
@@ -1323,8 +1419,21 @@ class NPUModelRunner(GPUModelRunner):
                 if num_computed_tokens < req_state.num_computed_tokens:
                     req_state.prev_num_draft_len = 0
 
+        original_num_spec_per_req = getattr(
+            self, "_spec_k_async_original_num_spec_per_req", {}
+        )
+        self._spec_k_async_original_num_spec_per_req = {}
+
         self._apply_pp_sampled_tokens_from_scheduler_output(scheduler_output)
         deferred_corrections = super()._update_states(scheduler_output)
+        # The engine-side async scheduler still advances by the fixed,
+        # optimistic placeholder width.  Keep that original width for the
+        # next-step rejection correction even though this worker verified only
+        # the dynamically selected prefix.
+        for req_id, original_num_spec in original_num_spec_per_req.items():
+            req_state = self.requests.get(req_id)
+            if req_state is not None:
+                req_state.prev_num_draft_len = original_num_spec
         if self._spec_k_enabled:
             for req_id in scheduler_output.finished_req_ids:
                 state = self._spec_k_request_states.pop(req_id, None)
@@ -2468,11 +2577,30 @@ class NPUModelRunner(GPUModelRunner):
             dynamic_spec = getattr(
                 getattr(self, "drafter", None), "dynamic_spec", None
             )
-            per_req_k = (
-                dynamic_spec.num_verify_tokens
-                if dynamic_spec is not None
-                else None
+            per_req_k = None
+            pending = getattr(self, "_spec_k_async_pending_step", None)
+            verify_lengths_cpu = getattr(
+                self, "_spec_k_async_verify_lengths_cpu", None
             )
+            if (
+                getattr(self, "use_async_scheduling", False)
+                and pending is not None
+                and pending.has_dynamic_verify_lengths
+                and verify_lengths_cpu is not None
+            ):
+                assert self.draft_token_ids_event is not None
+                self.draft_token_ids_event.synchronize()
+                pending_rows = {
+                    req_id: row for row, req_id in enumerate(pending.req_ids)
+                }
+                per_req_k = [
+                    int(verify_lengths_cpu[pending_rows[req_id]].item())
+                    if req_id in pending_rows
+                    else self.num_spec_tokens
+                    for req_id in out.req_ids
+                ]
+            elif dynamic_spec is not None:
+                per_req_k = dynamic_spec.num_verify_tokens
             if per_req_k is not None:
                 per_req_k = [
                     max(0, min(int(k), self.num_spec_tokens))
@@ -2553,13 +2681,24 @@ class NPUModelRunner(GPUModelRunner):
         if self.execute_model_state is not None:
             raise RuntimeError("State error: sample_tokens() must be called after execute_model() returns None.")
        
-        # If ngram_gpu is used, we need to copy the scheduler_output to avoid
-        # the modification has influence on the scheduler_output in engine core process.
-        # The replace is much faster than deepcopy.
+        # ngram_gpu and dynamic DSpark trim speculative placeholders locally.
+        # Copy the mutable mappings so an in-process engine-core scheduler
+        # keeps its original optimistic accounting. ``replace`` is much faster
+        # than deepcopy.
+        dynamic_spec_method = getattr(
+            getattr(self.ascend_config, "dynamic_spec_config", None),
+            "method",
+            None,
+        )
+        uses_async_dynamic_spec = (
+            self._spec_k_enabled
+            and self.use_async_scheduling
+            and dynamic_spec_method == "dspark"
+        )
         if (
             self.speculative_config is not None
             and self.speculative_config.use_ngram_gpu()
-        ):
+        ) or uses_async_dynamic_spec:
             num_scheduled_tokens_copy = scheduler_output.num_scheduled_tokens.copy()
             spec_decode_tokens_copy = (
                 scheduler_output.scheduled_spec_decode_tokens.copy()
@@ -2601,7 +2740,15 @@ class NPUModelRunner(GPUModelRunner):
         with record_function_or_nullcontext("prepare input"):
             with self.synchronize_input_prep():
                 if self._spec_k_enabled and self.use_async_scheduling:
-                    self._consume_async_spec_k_step()
+                    dynamic_lengths_ready = (
+                        self._trim_async_dynamic_spec_tokens(scheduler_output)
+                    )
+                    self._consume_async_spec_k_step(
+                        event_synchronized=dynamic_lengths_ready
+                    )
+                    num_scheduled_tokens = (
+                        scheduler_output.total_num_scheduled_tokens
+                    )
                 # Fix up prev_req_id_to_index for requests that were discarded
                 # in the previous sample_tokens step. If a request has
                 # prev_num_draft_len > 0 but is missing from
