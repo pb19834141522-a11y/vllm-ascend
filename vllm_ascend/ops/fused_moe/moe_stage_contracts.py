@@ -39,6 +39,7 @@ class MoEPrepareOutput:
     mc2_mask: torch.Tensor | None
     padded_hidden_states_shape: torch.Size | None
     pertoken_scale: torch.Tensor | None = None
+    token_top_ks: torch.Tensor | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +103,7 @@ class MoEMC2CombineMetadata:
     expand_scales: torch.Tensor | None
     quant: MoEQuantParams
     mc2_mask: torch.Tensor | None = None
+    route_active_mask: torch.Tensor | None = None
 
 
 @dataclass(frozen=True, slots=True)

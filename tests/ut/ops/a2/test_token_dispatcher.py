@@ -227,6 +227,45 @@ class TestTokenDispatcherWithMC2(TestBase):
         self.assertEqual(kwargs["global_bs"], 0)
         self.assertIs(kwargs["x_active_mask"], mc2_mask)
 
+    def test_spec_k_mc2_masks_dropped_routes_in_dispatch_and_combine(self):
+        ascend_config = MagicMock()
+        ascend_config.spec_k_config.enabled = True
+        ascend_config.enable_mc2_hierarchy_comm = False
+        with patch(
+            "vllm_ascend.ops.fused_moe.token_dispatcher.get_ascend_config",
+            return_value=ascend_config,
+        ):
+            dispatcher = TokenDispatcherWithMC2(top_k=3, num_experts=8)
+
+        topk_ids = torch.tensor([[1, 2, 3], [0, 2, 4]], dtype=torch.int32)
+        token_input = build_token_dispatch_input_fixture(
+            hidden_states=torch.randn(2, 128),
+            topk_weights=torch.tensor([[0.6, 0.0, 0.4], [1.0, 0.0, 0.0]]),
+            topk_ids=topk_ids,
+            expert_map=torch.arange(8),
+            mc2_mask=torch.tensor([True, False]),
+        )
+        with patch(
+            "torch_npu.npu_moe_distribute_dispatch_v2",
+            return_value=(torch.randn(2, 128),) * 5 + (None, None),
+        ) as mock_dispatch:
+            dispatched = dispatcher.token_dispatch(token_input)
+
+        dispatch_kwargs = mock_dispatch.call_args.kwargs
+        self.assertEqual(dispatcher.global_bs, 0)
+        self.assertIs(dispatch_kwargs["expert_ids"], topk_ids)
+        self.assertEqual(
+            dispatch_kwargs["x_active_mask"].tolist(),
+            [[True, False, True], [False, False, False]],
+        )
+        self.assertEqual(topk_ids.tolist(), [[1, 2, 3], [0, 2, 4]])
+
+        combine_kwargs = dispatcher.get_combine_mc_kwargs(
+            torch.randn(2, 128), dispatched.combine_metadata
+        )
+        self.assertIs(combine_kwargs["x_active_mask"], dispatch_kwargs["x_active_mask"])
+        self.assertIs(combine_kwargs["expert_ids"], dispatch_kwargs["expert_ids"])
+
     def test_get_dispatch_mc2_kwargs_without_quant(self):
         hidden_states = torch.randn(10, 128)
         topk_ids = torch.randint(0, 8, (10, 1))

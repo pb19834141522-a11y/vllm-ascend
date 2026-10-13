@@ -141,10 +141,10 @@ class TokenDispatcherWithMC2(MoETokenDispatcher[MoEMC2CombineMetadata]):
         self.max_num_tokens_per_rank = num_tokens_per_tp_rank
         _max_global_bs = num_tokens_per_tp_rank * self.ep_world_size
 
-        # When allreduce across DP is not skipped, tokens are uniform across ranks:
-        # use global_bs=0 (uniform mode) and pass mc2_mask.
-        # When allreduce is skipped, tokens may differ per rank:
-        # use the real global_bs and do NOT pass mc2_mask.
+        # A route-level active mask requires uniform BS across EP ranks. The
+        # fixed capacity can exceed the current graph BS, and using it as
+        # global_bs together with x_active_mask is rejected by CANN.
+        self.spec_k_enabled = get_ascend_config().spec_k_config.enabled is True
         self.global_bs = _max_global_bs if should_skip_allreduce_across_dp_group(vllm_config) else 0
 
         # NOTE: When enable_mc2_hierarchy_comm is true, we need pass in `comm_alg` to mc2 op.
@@ -154,6 +154,8 @@ class TokenDispatcherWithMC2(MoETokenDispatcher[MoEMC2CombineMetadata]):
             raise RuntimeError(
                 "PTA and CANN version is too old to support mc2 hierarchy comm, please upgrade your version."
             )
+        if self.spec_k_enabled and not self.enable_dispatch_v2:
+            raise RuntimeError("Spec-K MC2 requires npu_moe_distribute_dispatch_v2 for route-level masking")
 
     def refresh_hccl_group(self) -> None:
         """Refresh MC2 communicator metadata after HCCL groups are recreated."""
@@ -185,6 +187,14 @@ class TokenDispatcherWithMC2(MoETokenDispatcher[MoEMC2CombineMetadata]):
             quant_mode = 0
         self.moe_expert_num = len(expert_map) + global_redundant_expert_num
         expert_token_nums_type = _get_expert_token_nums_type(token_dispatch_input)
+        route_active_mask = None
+        if self.spec_k_enabled:
+            # Spec-K leaves expert IDs intact for MC2 so each row remains
+            # unique and in range. A zero routing weight marks a dropped route.
+            route_active_mask = topk_weights != 0
+            mc2_mask = token_dispatch_input.routing.mc2_mask
+            if mc2_mask is not None:
+                route_active_mask = route_active_mask & mc2_mask[: hidden_states.shape[0]].unsqueeze(-1)
         kwargs_mc2 = {
             "x": hidden_states,
             "expert_ids": topk_ids,
@@ -194,7 +204,9 @@ class TokenDispatcherWithMC2(MoETokenDispatcher[MoEMC2CombineMetadata]):
             "global_bs": self.global_bs,
             "expert_token_nums_type": expert_token_nums_type,
         }
-        if self.global_bs == 0:
+        if route_active_mask is not None:
+            kwargs_mc2["x_active_mask"] = route_active_mask
+        elif self.global_bs == 0:
             kwargs_mc2["x_active_mask"] = token_dispatch_input.routing.mc2_mask
 
         stage1_kwargs = {
@@ -265,7 +277,7 @@ class TokenDispatcherWithMC2(MoETokenDispatcher[MoEMC2CombineMetadata]):
             group_list=expert_token_nums,
             group_list_type=group_list_type,
             combine_metadata=MoEMC2CombineMetadata(
-                topk_ids=token_dispatch_input.topk_ids,
+                topk_ids=kwargs_mc2["expert_ids"],
                 topk_weights=token_dispatch_input.topk_weights,
                 expert_map=token_dispatch_input.routing.expert_map,
                 ep_recv_counts=ep_recv_counts,
@@ -273,7 +285,11 @@ class TokenDispatcherWithMC2(MoETokenDispatcher[MoEMC2CombineMetadata]):
                 assist_info_for_combine=assist_info_for_combine,
                 expand_scales=expand_scales,
                 quant=token_dispatch_input.quant,
-                mc2_mask=token_dispatch_input.routing.mc2_mask if self.global_bs == 0 else None,
+                mc2_mask=(
+                    token_dispatch_input.routing.mc2_mask
+                    if self.global_bs == 0 and not self.spec_k_enabled else None
+                ),
+                route_active_mask=kwargs_mc2.get("x_active_mask") if self.spec_k_enabled else None,
             ),
         )
 
@@ -306,7 +322,9 @@ class TokenDispatcherWithMC2(MoETokenDispatcher[MoEMC2CombineMetadata]):
             "moe_expert_num": self.moe_expert_num,
             "global_bs": self.global_bs,
         }
-        if self.global_bs == 0:
+        if self.spec_k_enabled:
+            kwargs_mc2["x_active_mask"] = combine_metadata.route_active_mask
+        elif self.global_bs == 0:
             kwargs_mc2["x_active_mask"] = combine_metadata.mc2_mask
 
         if combine_metadata.quant.dispatch_with_quant:

@@ -61,6 +61,23 @@ class TestPrepareAndFinalize(unittest.TestCase):
         self.assertEqual(result.shape[0], 3)
 
     @patch("vllm_ascend.ops.fused_moe.prepare_finalize.get_tensor_model_parallel_world_size", return_value=2)
+    @patch("vllm_ascend.ops.fused_moe.prepare_finalize.get_tensor_model_parallel_rank", return_value=1)
+    @patch("vllm_ascend.ascend_forward_context.get_forward_context")
+    def test_mc2_prepare_aligns_spec_k_with_padded_tp_tokens(self, mock_context, mock_tp_rank, mock_tp_size):
+        context = mock_context.return_value
+        context.mc2_mask = torch.tensor([1, 1, 1, 0])
+        context.padded_num_tokens = 4
+        context.token_top_ks = torch.tensor([6, 4, 3], dtype=torch.int32)
+
+        prepared = PrepareAndFinalizeWithMC2(self.moe_config).prepare(
+            torch.randn(3, 8), torch.randn(3, 2)
+        )
+
+        self.assertEqual(prepared.hidden_states.shape[0], 2)
+        self.assertEqual(prepared.mc2_mask.tolist(), [1, 0])
+        self.assertEqual(prepared.token_top_ks.tolist(), [3, 0])
+
+    @patch("vllm_ascend.ops.fused_moe.prepare_finalize.get_tensor_model_parallel_world_size", return_value=2)
     @patch("vllm_ascend.ops.fused_moe.prepare_finalize.get_tensor_model_parallel_rank", return_value=0)
     @patch("vllm_ascend.ascend_forward_context.get_forward_context")
     @patch("torch.distributed.all_gather")

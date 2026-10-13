@@ -1025,29 +1025,37 @@ class AscendMoERunner(MoERunner):  # type: ignore[no-redef]
         # apply() expects a RoutedExperts-like layer for weight access
         # (w13_weight, w2_weight, swiglu_limit, etc.). Pass routed_experts,
         # not self; the routing params come through the other kwargs.
-        fused_experts_results: FusedExpertsResult = self._quant_method.apply(
-            layer=self.routed_experts,
-            x=hidden_states,
-            router_logits=router_logits,
-            pertoken_scale=pertoken_scale,
-            top_k=self.top_k,
-            renormalize=self.renormalize,
-            use_grouped_topk=self.use_grouped_topk,
-            num_experts=self.moe_config.num_experts,
-            expert_map=self._expert_map,
-            topk_group=self.topk_group,
-            num_expert_group=self.num_expert_group,
-            custom_routing_function=self.custom_routing_function,
-            scoring_func=self.scoring_func,
-            routed_scaling_factor=self._original_routed_scaling_factor,
-            e_score_correction_bias=self.e_score_correction_bias,
-            activation=self.activation,
-            apply_router_weight_on_input=self.apply_router_weight_on_input,
-            enable_force_load_balance=enable_force_load_balance,
-            log2phy=self.log2phy,
-            global_redundant_expert_num=self.global_redundant_expert_num,
-            mc2_mask=mc2_mask,
-        )
+        original_token_top_ks = _EXTRA_CTX.token_top_ks
+        use_prepared_top_ks = prepare_output.token_top_ks is not None
+        if use_prepared_top_ks:
+            _EXTRA_CTX.token_top_ks = prepare_output.token_top_ks
+        try:
+            fused_experts_results: FusedExpertsResult = self._quant_method.apply(
+                layer=self.routed_experts,
+                x=hidden_states,
+                router_logits=router_logits,
+                pertoken_scale=pertoken_scale,
+                top_k=self.top_k,
+                renormalize=self.renormalize,
+                use_grouped_topk=self.use_grouped_topk,
+                num_experts=self.moe_config.num_experts,
+                expert_map=self._expert_map,
+                topk_group=self.topk_group,
+                num_expert_group=self.num_expert_group,
+                custom_routing_function=self.custom_routing_function,
+                scoring_func=self.scoring_func,
+                routed_scaling_factor=self._original_routed_scaling_factor,
+                e_score_correction_bias=self.e_score_correction_bias,
+                activation=self.activation,
+                apply_router_weight_on_input=self.apply_router_weight_on_input,
+                enable_force_load_balance=enable_force_load_balance,
+                log2phy=self.log2phy,
+                global_redundant_expert_num=self.global_redundant_expert_num,
+                mc2_mask=mc2_mask,
+            )
+        finally:
+            if use_prepared_top_ks:
+                _EXTRA_CTX.token_top_ks = original_token_top_ks
 
         if self.dynamic_eplb and _EXTRA_CTX.eplb_heat_collection_status:
             expert_tokens = fused_experts_results.expert_tokens

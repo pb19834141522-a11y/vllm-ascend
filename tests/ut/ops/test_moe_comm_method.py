@@ -11,6 +11,7 @@ from vllm_ascend.ops.fused_moe.moe_comm_method import (
     FusedMC2CommImpl,
     MC2CommImpl,
     MoECommMethod,
+    _map_logical_ids_to_phy,
 )
 from vllm_ascend.ops.fused_moe.moe_runtime_args import (
     MoEAllGatherCombineMetadata,
@@ -237,6 +238,7 @@ class TestMoECommMethod(TestBase):
     def test_fused_experts_method(
         self, mock_unified_apply_mlp, mock_token_dispatcher, mock_prepare_finalize, mock_get_forward_context
     ):
+        self.mock_ascend_config.spec_k_config.enabled = True
         # Mock forward context
         mock_context = MagicMock()
         mock_context.moe_comm_method = "all_gather"
@@ -255,7 +257,7 @@ class TestMoECommMethod(TestBase):
 
         # Mock token dispatcher
         mock_td_instance = MagicMock()
-        dispatch_topk_weights = torch.tensor([[0.5, 0.5], [0.3, 0.7], [0.8, 0.2], [0.6, 0.4]])
+        dispatch_topk_weights = torch.tensor([[0.5, 0.0], [0.3, 0.7], [0.8, 0.2], [0.6, 0.4]])
         mock_td_instance.token_dispatch.return_value = MoETokenDispatchOutput(
             hidden_states=torch.randn(6, 8),
             group_list=torch.tensor([2, 2, 2]),
@@ -280,7 +282,7 @@ class TestMoECommMethod(TestBase):
         w1 = torch.randn(16, 8).contiguous()
         w2 = torch.randn(16, 8).contiguous()
         topk_weights = dispatch_topk_weights
-        topk_ids = torch.tensor([[0, 1], [1, 2], [2, 0], [1, 1]])
+        topk_ids = torch.tensor([[0, -1], [1, 2], [2, 0], [1, 1]])
 
         # Make sure tensors are contiguous and have correct strides
         hidden_states = hidden_states.contiguous()
@@ -314,6 +316,8 @@ class TestMoECommMethod(TestBase):
 
         # Verify token_dispatch was called
         mock_td_instance.token_dispatch.assert_called_once()
+        dispatched_ids = mock_td_instance.token_dispatch.call_args.kwargs["token_dispatch_input"].topk_ids
+        self.assertEqual(dispatched_ids[0, 1].item(), -1)
 
         # Verify unified_apply_mlp was called
         mock_unified_apply_mlp.assert_called_once()
@@ -326,3 +330,19 @@ class TestMoECommMethod(TestBase):
             hidden_states=mock_unified_apply_mlp.return_value[0],
             combine_metadata=mock_td_instance.token_dispatch.return_value.combine_metadata,
         )
+
+
+def test_spec_k_invalid_routes_cannot_become_rank_one_expert():
+    # With two physical slots per rank, the former sentinel 2 was rank 1's
+    # first valid expert. The dropped route must stay outside every rank's
+    # active expert range, both with and without an offload placement map.
+    topk_ids = torch.tensor([[0, 1, -1, -1]], dtype=torch.int32)
+    for log2phy in (None, torch.tensor([0, 1, 2, 3], dtype=torch.int32)):
+        mapped = _map_logical_ids_to_phy(topk_ids, log2phy, 2, invalid_id=-1)
+        assert mapped.tolist() == [[0, 1, -1, -1]]
+        assert ((mapped >= 0) & (mapped < 2)).sum().item() == 2
+        assert ((mapped >= 2) & (mapped < 4)).sum().item() == 0
+
+        unsigned_ids = topk_ids.view(torch.uint32)
+        unsigned_mapped = _map_logical_ids_to_phy(unsigned_ids, log2phy, 2, invalid_id=-1)
+        assert unsigned_mapped.tolist() == [[0, 1, -1, -1]]

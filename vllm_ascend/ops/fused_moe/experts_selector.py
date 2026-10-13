@@ -279,7 +279,11 @@ def apply_dynamic_top_k(
         if topk_ids.dtype == torch.uint32
         else topk_ids
     )
-    writable_ids.masked_fill_(route_mask, -1)
+    # MC2 uses a per-route communication mask. Keep the original, unique
+    # expert IDs required by the dispatch/combine operators; zero weights
+    # identify the routes to skip. Other dispatchers still need -1 IDs.
+    if _EXTRA_CTX.moe_comm_type != MoECommType.MC2:
+        writable_ids.masked_fill_(route_mask, -1)
     topk_weights.masked_fill_(route_mask, 0.0)
 
 

@@ -6,9 +6,10 @@ import pytest
 import torch
 
 from vllm_ascend.ops.fused_moe import experts_selector
+from vllm_ascend.ascend_forward_context import MoECommType
 
 
-def _enable_spec_k(monkeypatch, token_top_ks):
+def _enable_spec_k(monkeypatch, token_top_ks, comm_type=MoECommType.ALLGATHER):
     monkeypatch.setattr(
         experts_selector,
         "get_ascend_config",
@@ -17,7 +18,7 @@ def _enable_spec_k(monkeypatch, token_top_ks):
     monkeypatch.setattr(
         experts_selector,
         "_EXTRA_CTX",
-        SimpleNamespace(token_top_ks=token_top_ks),
+        SimpleNamespace(token_top_ks=token_top_ks, moe_comm_type=comm_type),
     )
 
 
@@ -42,6 +43,19 @@ def test_apply_dynamic_top_k_masks_routes_per_token(monkeypatch):
         [1.0, 1.0, 1.0, 0.0],
         [1.0, 1.0, 0.0, 0.0],
     ]
+
+
+def test_apply_dynamic_top_k_preserves_unique_ids_for_mc2(monkeypatch):
+    _enable_spec_k(monkeypatch, torch.tensor([2], dtype=torch.int32), MoECommType.MC2)
+    topk_ids = torch.tensor([[1, 3, 5, 7]], dtype=torch.int32)
+    topk_weights = torch.ones(1, 4)
+
+    experts_selector.apply_dynamic_top_k(
+        topk_weights, topk_ids, SimpleNamespace(_spec_k_full_top_k=False)
+    )
+
+    assert topk_ids.tolist() == [[1, 3, 5, 7]]
+    assert topk_weights.tolist() == [[1.0, 1.0, 0.0, 0.0]]
 
 
 def test_apply_dynamic_top_k_preserves_full_top_k_layer(monkeypatch):

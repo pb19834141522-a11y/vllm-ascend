@@ -401,9 +401,32 @@ def select_moe_comm_method(
     soc_version = get_ascend_device_type()
     lora_config = getattr(vllm_config, "lora_config", None)
     spec_k_config = getattr(ascend_config, "spec_k_config", None)
-    if (
-        (spec_k_config is not None and spec_k_config.enabled)
-        or not vllm_config.parallel_config.enable_expert_parallel
+    spec_k_enabled = spec_k_config is not None and spec_k_config.enabled
+    offload_config = getattr(ascend_config, "expert_offload_config", None)
+    expert_offload = bool(offload_config is not None and getattr(offload_config, "expert_offload", False))
+    kv_transfer_config = getattr(vllm_config, "kv_transfer_config", None)
+    is_kv_consumer = kv_transfer_config is not None and kv_transfer_config.is_kv_consumer
+    if spec_k_enabled:
+        # Only the A3 decomposed MC2 dispatcher has the route-level mask
+        # needed to keep dropped Spec-K experts out of EP communication.
+        # Other paths retain the existing AllGather behavior.
+        if (
+            soc_version == AscendDeviceType.A3
+            and not is_draft_model
+            and vllm_config.parallel_config.enable_expert_parallel
+            and get_ep_group().world_size > 1
+            and lora_config is None
+            and not expert_offload
+            and not is_kv_consumer
+            and not getattr(ascend_config, "enable_mc2_hierarchy_comm", False)
+            and num_tokens <= _MC2_TOKENS_PER_RANK_LIMIT * vllm_config.parallel_config.tensor_parallel_size
+            and num_tokens <= mc2_tokens_capacity
+        ):
+            moe_comm_type = MoECommType.MC2
+        else:
+            moe_comm_type = MoECommType.ALLGATHER
+    elif (
+        not vllm_config.parallel_config.enable_expert_parallel
         or get_ep_group().world_size == 1
     ):
         moe_comm_type = MoECommType.ALLGATHER

@@ -153,6 +153,15 @@ class MoECommMethod(ABC):
             fused_experts_input.topk_ids,
             fused_experts_input.routing.log2phy,
             fused_experts_input.routing.num_local_experts,
+            # The local slot count can name a real expert on another EP rank.
+            # Preserve dropped routes as -1 until the selected dispatcher
+            # turns them into inactive entries.
+            invalid_id=(
+                -1
+                if isinstance(self, (AllGatherCommImpl, MC2CommImpl))
+                and get_ascend_config().spec_k_config.enabled
+                else None
+            ),
         )
 
         token_dispatch_input = build_token_dispatch_input(
@@ -199,19 +208,22 @@ class MoECommMethod(ABC):
         raise NotImplementedError("_get_prepare_finalize function not implemented.")
 
 
-def _map_logical_ids_to_phy(topk_ids, log2phy, num_local_experts):
-    invalid_phy = int(num_local_experts)
+def _map_logical_ids_to_phy(topk_ids, log2phy, num_local_experts, *, invalid_id=None):
+    invalid_phy = int(num_local_experts) if invalid_id is None else invalid_id
+    # The router may return uint32 IDs; Spec-K writes -1 through an int32
+    # view, which otherwise appears as a large positive unsigned value.
+    signed_ids = topk_ids.view(torch.int32) if topk_ids.dtype == torch.uint32 else topk_ids
 
     if log2phy is None:
-        valid = topk_ids >= 0
+        valid = signed_ids >= 0
         return torch.where(
-            valid, topk_ids,
-            topk_ids.new_full(topk_ids.shape, invalid_phy))
+            valid, signed_ids,
+            signed_ids.new_full(signed_ids.shape, invalid_phy))
     logical_valid = (
-        (topk_ids >= 0) & (topk_ids < log2phy.numel())
+        (signed_ids >= 0) & (signed_ids < log2phy.numel())
     )
 
-    safe_ids = topk_ids.clamp(
+    safe_ids = signed_ids.clamp(
         min=0,
         max=log2phy.numel() - 1,
     ).long()

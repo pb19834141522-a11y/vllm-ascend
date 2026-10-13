@@ -15,6 +15,43 @@
 # This file is a part of the vllm-ascend project.
 #
 
+import sys
+from types import ModuleType
+
+
+def _install_triton_compat():
+    """Keep vLLM's GPU-only Gluon imports optional with Triton-Ascend 3.2."""
+    import triton
+    import triton.language.core as core
+
+    if not hasattr(core, "constexpr_type"):
+        try:
+            import triton.experimental as experimental
+        except ModuleNotFoundError as exc:
+            if exc.name != "triton.experimental":
+                raise
+            experimental = ModuleType("triton.experimental")
+            experimental.__path__ = []
+            triton.experimental = experimental
+            sys.modules[experimental.__name__] = experimental
+
+        gluon = ModuleType("triton.experimental.gluon")
+        language = ModuleType("triton.experimental.gluon.language")
+        gluon.language = language
+        experimental.gluon = gluon
+        sys.modules[gluon.__name__] = gluon
+        sys.modules[language.__name__] = language
+
+    if not hasattr(core, "_aggregate"):
+
+        def unsupported_aggregate(*args, **kwargs):
+            raise NotImplementedError("Triton-Ascend 3.2 does not support Gluon aggregate")
+
+        core._aggregate = unsupported_aggregate
+
+
+_install_triton_compat()
+
 _GLOBAL_PATCH_APPLIED = False
 
 

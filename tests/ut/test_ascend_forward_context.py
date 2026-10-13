@@ -503,6 +503,74 @@ def test_select_moe_comm_method_a3_without_fused_mc2(
 
 
 @pytest.mark.parametrize(
+    ("num_tokens", "fused_mc2", "expected"),
+    [
+        (8, 0, MoECommType.MC2),
+        (8, 1, MoECommType.MC2),
+        (129, 0, MoECommType.ALLGATHER),
+    ],
+)
+def test_a3_spec_k_uses_maskable_mc2_within_capacity(monkeypatch, num_tokens, fused_mc2, expected):
+    _patch_select_moe_comm_method_deps(
+        monkeypatch,
+        device_type=afc.AscendDeviceType.A3,
+        capacity=128,
+        ep_world_size=8,
+        enable_fused_mc2=fused_mc2,
+        spec_k_enabled=True,
+    )
+    assert afc.select_moe_comm_method(num_tokens, _make_vllm_config()) == expected
+
+
+@pytest.mark.parametrize("device_type", [afc.AscendDeviceType.A2, afc.AscendDeviceType.A5])
+def test_other_devices_keep_spec_k_allgather(monkeypatch, device_type):
+    _patch_select_moe_comm_method_deps(
+        monkeypatch,
+        device_type=device_type,
+        spec_k_enabled=True,
+    )
+    assert afc.select_moe_comm_method(8, _make_vllm_config()) == MoECommType.ALLGATHER
+
+
+def test_spec_k_draft_keeps_existing_communication_path(monkeypatch):
+    _patch_select_moe_comm_method_deps(
+        monkeypatch,
+        device_type=afc.AscendDeviceType.A3,
+        capacity=128,
+        ep_world_size=8,
+        spec_k_enabled=True,
+    )
+    assert afc.select_moe_comm_method(8, _make_vllm_config(), is_draft_model=True) == MoECommType.ALLGATHER
+
+
+def test_spec_k_hierarchy_comm_falls_back_to_allgather(monkeypatch):
+    _patch_select_moe_comm_method_deps(
+        monkeypatch,
+        device_type=afc.AscendDeviceType.A3,
+        capacity=128,
+        ep_world_size=8,
+        spec_k_enabled=True,
+    )
+    ascend_config = afc.get_ascend_config()
+    ascend_config.enable_mc2_hierarchy_comm = True
+    monkeypatch.setattr(afc, "get_ascend_config", lambda: ascend_config)
+    assert afc.select_moe_comm_method(8, _make_vllm_config()) == MoECommType.ALLGATHER
+
+
+def test_spec_k_kv_consumer_avoids_nonuniform_mc2_mask(monkeypatch):
+    _patch_select_moe_comm_method_deps(
+        monkeypatch,
+        device_type=afc.AscendDeviceType.A3,
+        capacity=128,
+        ep_world_size=8,
+        spec_k_enabled=True,
+    )
+    config = _make_vllm_config()
+    config.kv_transfer_config = SimpleNamespace(is_kv_consumer=True)
+    assert afc.select_moe_comm_method(8, config) == MoECommType.ALLGATHER
+
+
+@pytest.mark.parametrize(
     ("num_tokens", "ep_world_size", "expected"),
     [
         (128, 8, MoECommType.FUSED_MC2),
