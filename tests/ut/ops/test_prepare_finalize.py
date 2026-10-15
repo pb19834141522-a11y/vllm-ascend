@@ -219,6 +219,7 @@ class TestPrepareAndFinalize(unittest.TestCase):
         # Mock forward context
         mock_context = MagicMock()
         mock_context.max_tokens_across_dp = 6
+        mock_context.token_top_ks = torch.tensor([6, 4, 3], dtype=torch.int32)
         mock_get_forward_context.return_value = mock_context
 
         # Create a proper mock for DP group with working all_gather
@@ -254,6 +255,11 @@ class TestPrepareAndFinalize(unittest.TestCase):
         # After all-gather with DP=2, should double the batch size
         self.assertEqual(h_out.shape[0], 12)
         self.assertEqual(r_out.shape[0], 12)
+        self.assertEqual(prepare_output.token_top_ks.shape, h_out.shape[:-1])
+        self.assertEqual(
+            prepare_output.token_top_ks.tolist(),
+            [6, 4, 3, 0, 0, 0, 6, 4, 3, 0, 0, 0],
+        )
         self.assertIsNone(padded_hidden_states_shape)
 
         # Shared-expert DP must not suppress routed-output reduce-scatter.

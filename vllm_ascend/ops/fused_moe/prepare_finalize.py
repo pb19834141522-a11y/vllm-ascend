@@ -368,13 +368,31 @@ class PrepareAndFinalizeWithAllGather(PrepareAndFinalize):
         Returns:
             MoEPrepareOutput with global tensors.
         """
+        token_top_ks = _EXTRA_CTX.token_top_ks
+        if not torch.is_tensor(token_top_ks):
+            token_top_ks = None
         if enable_sp() or enable_sp_by_pass():
-            return self._prepare_with_ep_group(hidden_states, router_logits, quant_type)
+            return self._prepare_with_ep_group(
+                hidden_states,
+                router_logits,
+                quant_type,
+                token_top_ks,
+            )
 
-        return self._prepare_with_dp_group(hidden_states, router_logits, enable_shared_expert_dp, replace_allreduce)
+        return self._prepare_with_dp_group(
+            hidden_states,
+            router_logits,
+            enable_shared_expert_dp,
+            replace_allreduce,
+            token_top_ks=token_top_ks,
+        )
 
     def _prepare_with_ep_group(
-        self, hidden_states: torch.Tensor, router_logits: torch.Tensor, quant_type=QuantType.NONE
+        self,
+        hidden_states: torch.Tensor,
+        router_logits: torch.Tensor,
+        quant_type=QuantType.NONE,
+        token_top_ks: torch.Tensor | None = None,
     ) -> MoEPrepareOutput:
         pertoken_scale = None
         if quant_type == QuantType.W8A8:
@@ -393,6 +411,12 @@ class PrepareAndFinalizeWithAllGather(PrepareAndFinalize):
 
         hidden_states = torch.ops.vllm.maybe_all_gather_and_maybe_unpad(hidden_states, True, True)
         router_logits = torch.ops.vllm.maybe_all_gather_and_maybe_unpad(router_logits, True, True)
+        if token_top_ks is not None:
+            token_top_ks = torch.ops.vllm.maybe_all_gather_and_maybe_unpad(
+                token_top_ks,
+                True,
+                True,
+            )
 
         # TODO(fuzhihong): To adapt to self.num_token in the all_gather_input_id_with_dp_group method,
         #  when flashcomm1 is used and dp = N(N >=2).
@@ -409,6 +433,8 @@ class PrepareAndFinalizeWithAllGather(PrepareAndFinalize):
             if pad_size > 0:
                 hidden_states = nn.functional.pad(hidden_states, (0, 0, 0, pad_size))
                 router_logits = nn.functional.pad(router_logits, (0, 0, 0, pad_size))
+                if token_top_ks is not None:
+                    token_top_ks = nn.functional.pad(token_top_ks, (0, pad_size))
                 if pertoken_scale is not None:
                     pertoken_scale = (
                         nn.functional.pad(pertoken_scale, (0, pad_size))
@@ -418,6 +444,8 @@ class PrepareAndFinalizeWithAllGather(PrepareAndFinalize):
 
             hidden_states = get_pcp_group().all_gather(hidden_states, dim=0)
             router_logits = get_pcp_group().all_gather(router_logits, dim=0)
+            if token_top_ks is not None:
+                token_top_ks = get_pcp_group().all_gather(token_top_ks, dim=0)
             if pertoken_scale is not None:
                 pertoken_scale = get_pcp_group().all_gather(pertoken_scale, dim=0)
 
@@ -427,6 +455,7 @@ class PrepareAndFinalizeWithAllGather(PrepareAndFinalize):
             mc2_mask=None,
             padded_hidden_states_shape=None,
             pertoken_scale=pertoken_scale,
+            token_top_ks=token_top_ks,
         )
 
     def _prepare_with_dp_group(
@@ -436,6 +465,7 @@ class PrepareAndFinalizeWithAllGather(PrepareAndFinalize):
         enable_shared_expert_dp: bool = False,
         replace_allreduce: bool = False,
         quant_type=QuantType.NONE,
+        token_top_ks: torch.Tensor | None = None,
     ) -> MoEPrepareOutput:
         """
         Preparation steps:
@@ -454,10 +484,14 @@ class PrepareAndFinalizeWithAllGather(PrepareAndFinalize):
             if pad_size > 0:
                 hidden_states = nn.functional.pad(hidden_states, (0, 0, 0, pad_size))
                 router_logits = nn.functional.pad(router_logits, (0, 0, 0, pad_size))
+                if token_top_ks is not None:
+                    token_top_ks = nn.functional.pad(token_top_ks, (0, pad_size))
 
             # All-gather across DP group
             hidden_states = self.moe_config.dp_group.all_gather(hidden_states, 0)
             router_logits = self.moe_config.dp_group.all_gather(router_logits, 0)
+            if token_top_ks is not None:
+                token_top_ks = self.moe_config.dp_group.all_gather(token_top_ks, 0)
 
         if self.moe_config.pcp_size > 1:
             max_tokens_across_pcp = _EXTRA_CTX.max_tokens_across_pcp
@@ -467,6 +501,8 @@ class PrepareAndFinalizeWithAllGather(PrepareAndFinalize):
             if pad_size > 0:
                 hidden_states = nn.functional.pad(hidden_states, (0, 0, 0, pad_size))
                 router_logits = nn.functional.pad(router_logits, (0, 0, 0, pad_size))
+                if token_top_ks is not None:
+                    token_top_ks = nn.functional.pad(token_top_ks, (0, pad_size))
 
             hidden_states = get_pcp_group().all_gather(
                 hidden_states,
@@ -476,6 +512,8 @@ class PrepareAndFinalizeWithAllGather(PrepareAndFinalize):
                 router_logits,
                 dim=0,
             )
+            if token_top_ks is not None:
+                token_top_ks = get_pcp_group().all_gather(token_top_ks, dim=0)
 
         return MoEPrepareOutput(
             hidden_states=hidden_states,
@@ -483,6 +521,7 @@ class PrepareAndFinalizeWithAllGather(PrepareAndFinalize):
             mc2_mask=None,
             padded_hidden_states_shape=None,
             pertoken_scale=None,
+            token_top_ks=token_top_ks,
         )
 
     def all_gather_input_id_with_dp_group(self, input_ids: torch.Tensor) -> torch.Tensor:
