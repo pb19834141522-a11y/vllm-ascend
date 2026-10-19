@@ -279,7 +279,8 @@ def test_entropy_diagnostics_persists_every_token_and_selection(tmp_path):
     assert token_records[1]["markov_ppl_ratio"] == pytest.approx(np.exp(-0.5))
     assert summary["proposed_tokens"] == 5
     assert summary["selected_tokens"] == 3
-    assert summary["markov_lowered_entropy_fraction"] == pytest.approx(0.8)
+    # All five valid token entropies decrease by 0.5 in this fixture.
+    assert summary["markov_lowered_entropy_fraction"] == pytest.approx(1.0)
     assert summary["expert_budget_counts"] == {2: 1, 3: 1, 5: 2, 6: 1}
 
 
@@ -313,3 +314,32 @@ def test_request_state_reconciles_recompute_and_missing_history():
 
     state.reconcile_output_length(4)
     assert state.output_top_ks.tolist() == [5, 4, 8, 8]
+
+
+def test_request_state_numpy_updates_match_recompute_and_growth():
+    state = SpecKRequestState(base_top_k=6)
+    rng = np.random.default_rng(17)
+    expected = []
+    for _ in range(200):
+        accepted = rng.integers(1, 7, size=int(rng.integers(0, 8)), dtype=np.int32)
+        sampled = int(rng.integers(1, 7))
+        # Cover ordinary appends, rewinds, and missing-history padding.
+        previous_length = max(0, len(expected) + int(rng.integers(-5, 8)))
+        expected = expected[:previous_length]
+        expected += [6] * (previous_length - len(expected))
+        expected += accepted.tolist() + [sampled]
+        state.finalize_step_values(accepted, sampled, len(expected))
+        accepted.fill(99)
+        assert state.output_top_ks.tolist() == expected
+        positions = rng.integers(0, len(expected) + 10, size=20, dtype=np.int64)
+        result = np.empty(len(positions), dtype=np.int32)
+        state.write_top_ks_for_positions(result, positions, 3, 0, False)
+        assert result.tolist() == [expected[p - 3] if 3 <= p < len(expected) + 3 else 6 for p in positions]
+
+
+def test_request_state_zero_rewind_does_not_restore_discarded_history():
+    state = SpecKRequestState(base_top_k=6)
+    state.finalize_step_values(np.array([2, 3]), 4)
+    state.reconcile_output_length(0)
+    state.reconcile_output_length(3)
+    assert state.output_top_ks.tolist() == [6, 6, 6]

@@ -43,6 +43,17 @@ _MAX_NUM_TOKENS = 8
 _HIDDEN_SIZE = 16
 
 
+@pytest.fixture(autouse=True)
+def _standalone_dspark_config(monkeypatch):
+    # These fixtures bypass the parent initializer and do not initialize the
+    # engine-global Ascend config. Use fixed-length drafting explicitly.
+    monkeypatch.setattr(
+        dspark_proposer_module,
+        "get_ascend_config",
+        lambda: SimpleNamespace(dynamic_spec_config=SimpleNamespace(method=None)),
+    )
+
+
 class _DSparkProposerTestBase:
     """Shared helpers for ``AscendDSparkProposer`` tests."""
 

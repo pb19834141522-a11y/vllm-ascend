@@ -10,6 +10,9 @@ import torch
 from vllm_ascend.ascend_config import SpecKConfig
 
 
+SPEC_K_HISTORY_INITIAL_CAPACITY = 64
+
+
 class SpecKPolicy:
     """Convert draft logits into per-token expert budgets."""
 
@@ -80,43 +83,76 @@ class SpecKHistoryUpdate:
 @dataclass(slots=True)
 class SpecKRequestState:
     base_top_k: int
-    output_top_ks: torch.Tensor = field(init=False)
+    _history: np.ndarray = field(init=False, repr=False)
+    _output_length: int = field(init=False, default=0)
     pending_draft_top_ks: torch.Tensor | None = None
 
     def __post_init__(self) -> None:
-        self.output_top_ks = torch.empty(0, dtype=torch.uint8, device="cpu")
+        self._history = np.empty(0, dtype=np.uint8)
+
+    @property
+    def output_top_ks(self) -> torch.Tensor:
+        return torch.from_numpy(self._history[:self._output_length])
+
+    @output_top_ks.setter
+    def output_top_ks(self, values: torch.Tensor) -> None:
+        values_np = values.to(device="cpu", dtype=torch.uint8).numpy()
+        self._reserve(len(values_np))
+        self._history[:len(values_np)] = values_np
+        self._output_length = len(values_np)
+
+    @property
+    def output_length(self) -> int:
+        return self._output_length
+
+    def _reserve(self, length: int) -> None:
+        if length <= len(self._history):
+            return
+        # Grow geometrically instead of copying the entire history each step.
+        history = np.empty(
+            max(length, 2 * len(self._history), SPEC_K_HISTORY_INITIAL_CAPACITY),
+            dtype=np.uint8,
+        )
+        history[:self._output_length] = self._history[:self._output_length]
+        self._history = history
 
     def reconcile_output_length(self, output_length: int) -> None:
-        current_length = self.output_top_ks.shape[0]
-        if current_length > output_length:
-            self.output_top_ks = self.output_top_ks[:output_length].clone()
-        elif current_length < output_length:
-            padding = torch.full(
-                (output_length - current_length,),
-                self.base_top_k,
-                dtype=torch.uint8,
-                device="cpu",
-            )
-            self.output_top_ks = torch.cat((self.output_top_ks, padding), dim=0)
+        if output_length < 0:
+            raise ValueError("Spec-K output history length became negative.")
+        self._reserve(output_length)
+        if output_length > self._output_length:
+            self._history[self._output_length:output_length] = self.base_top_k
+        self._output_length = output_length
 
     def finalize_step(
         self,
         update: SpecKHistoryUpdate,
         sampled_token_top_k: torch.Tensor,
     ) -> None:
-        num_new_tokens = update.accepted_top_ks.shape[0] + 1
-        previous_length = update.new_output_length - num_new_tokens
+        self.finalize_step_values(
+            update.accepted_top_ks.to(device="cpu").numpy(),
+            int(sampled_token_top_k.item()),
+            update.new_output_length,
+        )
+
+    def finalize_step_values(
+        self,
+        accepted_top_ks: np.ndarray,
+        sampled_token_top_k: int,
+        new_output_length: int | None = None,
+    ) -> None:
+        """Append completed host mirrors without per-request Torch operations."""
+        num_new_tokens = len(accepted_top_ks) + 1
+        if new_output_length is None:
+            new_output_length = self._output_length + num_new_tokens
+        previous_length = new_output_length - num_new_tokens
         if previous_length < 0:
             raise ValueError("Spec-K output history length became negative.")
         self.reconcile_output_length(previous_length)
-        top_ks = torch.cat(
-            (
-                update.accepted_top_ks.to(dtype=torch.uint8, device="cpu"),
-                sampled_token_top_k.to(dtype=torch.uint8, device="cpu").reshape(1),
-            ),
-            dim=0,
-        )
-        self.output_top_ks = torch.cat((self.output_top_ks, top_ks), dim=0)
+        self._reserve(new_output_length)
+        self._history[previous_length:new_output_length - 1] = accepted_top_ks
+        self._history[new_output_length - 1] = sampled_token_top_k
+        self._output_length = new_output_length
 
     def set_pending_draft_top_ks(self, top_ks: torch.Tensor) -> None:
         self.pending_draft_top_ks = top_ks.to(dtype=torch.uint8, device="cpu").clone()
@@ -128,23 +164,31 @@ class SpecKRequestState:
         pending_draft_start_position: int,
         use_pending_draft: bool,
     ) -> torch.Tensor:
-        result = torch.full(
-            (len(positions),),
-            self.base_top_k,
-            dtype=torch.int32,
-            device="cpu",
+        result = np.empty(len(positions), dtype=np.int32)
+        self.write_top_ks_for_positions(
+            result, positions, num_prompt_tokens,
+            pending_draft_start_position, use_pending_draft,
         )
-        position_tensor = torch.from_numpy(positions.astype(np.int64, copy=False))
+        return torch.from_numpy(result)
 
-        output_indices = position_tensor - num_prompt_tokens
-        history_mask = (output_indices >= 0) & (output_indices < self.output_top_ks.shape[0])
+    def write_top_ks_for_positions(
+        self,
+        result: np.ndarray,
+        positions: np.ndarray,
+        num_prompt_tokens: int,
+        pending_draft_start_position: int,
+        use_pending_draft: bool,
+    ) -> None:
+        """Fill an existing host buffer, including historical recompute rows."""
+        result.fill(self.base_top_k)
+        output_indices = positions - num_prompt_tokens
+        history_mask = (output_indices >= 0) & (output_indices < self._output_length)
         if history_mask.any():
-            result[history_mask] = self.output_top_ks[output_indices[history_mask]].to(torch.int32)
+            result[history_mask] = self._history[output_indices[history_mask]]
 
         pending = self.pending_draft_top_ks
         if use_pending_draft and pending is not None:
-            pending_indices = position_tensor - pending_draft_start_position
+            pending_indices = positions - pending_draft_start_position
             pending_mask = (pending_indices >= 0) & (pending_indices < pending.shape[0])
             if pending_mask.any():
-                result[pending_mask] = pending[pending_indices[pending_mask]].to(torch.int32)
-        return result
+                result[pending_mask] = pending.numpy()[pending_indices[pending_mask]]

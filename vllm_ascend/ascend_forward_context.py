@@ -139,6 +139,12 @@ def set_ascend_forward_context(
     }
     with set_forward_context(**forward_context_kwargs):
         forward_context = get_forward_context()
+        spec_k_config = getattr(get_ascend_config(), "spec_k_config", None)
+        _EXTRA_CTX.spec_k_active = bool(
+            spec_k_config is not None
+            and spec_k_config.enabled
+            and not is_draft_model
+        )
         _EXTRA_CTX.token_top_ks = token_top_ks
         forward_context.draft_attn_metadatas = draft_attn_metadatas
 
@@ -406,13 +412,14 @@ def select_moe_comm_method(
     expert_offload = bool(offload_config is not None and getattr(offload_config, "expert_offload", False))
     kv_transfer_config = getattr(vllm_config, "kv_transfer_config", None)
     is_kv_consumer = kv_transfer_config is not None and kv_transfer_config.is_kv_consumer
-    if spec_k_enabled:
+    if spec_k_enabled and not is_draft_model:
         # Only the A3 decomposed MC2 dispatcher has the route-level mask
         # needed to keep dropped Spec-K experts out of EP communication.
-        # Other paths retain the existing AllGather behavior.
+        # Other target-model paths retain the existing AllGather behavior.
+        # The draft model does not prune experts with Spec-K, so it must keep
+        # the normal communication selection used by the baseline.
         if (
             soc_version == AscendDeviceType.A3
-            and not is_draft_model
             and vllm_config.parallel_config.enable_expert_parallel
             and get_ep_group().world_size > 1
             and lora_config is None
@@ -547,6 +554,28 @@ def select_moe_comm_method(
     return moe_comm_type
 
 
+def is_spec_k_active(spec_k_enabled: bool | None = None) -> bool:
+    """Return whether Spec-K applies to the current model forward.
+
+    Spec-K prunes target-model routes only. The process-wide configuration is
+    also visible while the draft model runs, so consumers must additionally
+    consult the per-forward flag. Calls made outside a forward context retain
+    the process-wide behavior for initialization and isolated operator tests.
+    """
+    if spec_k_enabled is False:
+        return False
+    try:
+        return _EXTRA_CTX.spec_k_active is True
+    except AssertionError:
+        if spec_k_enabled is not None:
+            return spec_k_enabled
+        try:
+            spec_k_config = getattr(get_ascend_config(), "spec_k_config", None)
+        except RuntimeError:
+            return False
+        return bool(spec_k_config is not None and spec_k_config.enabled)
+
+
 class _ExtraForwardContextProxy:
     """Unified forward-context access for v1/v2 model runners."""
 
@@ -575,6 +604,7 @@ class _ExtraForwardContextProxy:
         "sinks",
         "eplb_heat_collection_status",
         "token_top_ks",
+        "spec_k_active",
     )
 
     def check_extra_attr(self, name: str):

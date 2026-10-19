@@ -23,7 +23,12 @@ from vllm.logger import logger
 from vllm.model_executor.layers.fused_moe import FusedMoEConfig
 
 from vllm_ascend.ascend_config import get_ascend_config
-from vllm_ascend.ascend_forward_context import _EXTRA_CTX, _MEGA_MOE_SUPPORTED, MoECommType
+from vllm_ascend.ascend_forward_context import (
+    _EXTRA_CTX,
+    _MEGA_MOE_SUPPORTED,
+    MoECommType,
+    is_spec_k_active,
+)
 from vllm_ascend.distributed.parallel_state import get_mc2_group
 from vllm_ascend.ops.activation import SituActivationConfig
 from vllm_ascend.ops.fused_moe import comm_utils
@@ -159,7 +164,7 @@ class MoECommMethod(ABC):
             invalid_id=(
                 -1
                 if isinstance(self, (AllGatherCommImpl, MC2CommImpl))
-                and get_ascend_config().spec_k_config.enabled
+                and is_spec_k_active()
                 else None
             ),
         )

@@ -29,7 +29,7 @@ from vllm.config import get_current_vllm_config
 from vllm.distributed.parallel_state import get_ep_group
 
 from vllm_ascend.ascend_config import get_ascend_config
-from vllm_ascend.ascend_forward_context import get_mc2_tokens_capacity
+from vllm_ascend.ascend_forward_context import get_mc2_tokens_capacity, is_spec_k_active
 from vllm_ascend.device.device_op import DeviceOperator
 from vllm_ascend.distributed.parallel_state import get_mc2_group
 from vllm_ascend.lora.fused_moe import (
@@ -157,6 +157,9 @@ class TokenDispatcherWithMC2(MoETokenDispatcher[MoEMC2CombineMetadata]):
         if self.spec_k_enabled and not self.enable_dispatch_v2:
             raise RuntimeError("Spec-K MC2 requires npu_moe_distribute_dispatch_v2 for route-level masking")
 
+    def _spec_k_active(self) -> bool:
+        return is_spec_k_active(self.spec_k_enabled)
+
     def refresh_hccl_group(self) -> None:
         """Refresh MC2 communicator metadata after HCCL groups are recreated."""
         device_group = get_mc2_group().device_group
@@ -188,7 +191,8 @@ class TokenDispatcherWithMC2(MoETokenDispatcher[MoEMC2CombineMetadata]):
         self.moe_expert_num = len(expert_map) + global_redundant_expert_num
         expert_token_nums_type = _get_expert_token_nums_type(token_dispatch_input)
         route_active_mask = None
-        if self.spec_k_enabled:
+        spec_k_active = self._spec_k_active()
+        if spec_k_active:
             # Spec-K leaves expert IDs intact for MC2 so each row remains
             # unique and in range. A zero routing weight marks a dropped route.
             route_active_mask = topk_weights != 0
@@ -253,6 +257,7 @@ class TokenDispatcherWithMC2(MoETokenDispatcher[MoEMC2CombineMetadata]):
         self,
         token_dispatch_input: MoETokenDispatchInput,
     ):
+        spec_k_active = self._spec_k_active()
         kwargs_mc2 = self.get_dispatch_mc2_kwargs(token_dispatch_input)
         output = (
             torch_npu.npu_moe_distribute_dispatch_v2(**kwargs_mc2)
@@ -287,9 +292,9 @@ class TokenDispatcherWithMC2(MoETokenDispatcher[MoEMC2CombineMetadata]):
                 quant=token_dispatch_input.quant,
                 mc2_mask=(
                     token_dispatch_input.routing.mc2_mask
-                    if self.global_bs == 0 and not self.spec_k_enabled else None
+                    if self.global_bs == 0 and not spec_k_active else None
                 ),
-                route_active_mask=kwargs_mc2.get("x_active_mask") if self.spec_k_enabled else None,
+                route_active_mask=kwargs_mc2.get("x_active_mask") if spec_k_active else None,
             ),
         )
 
@@ -322,7 +327,7 @@ class TokenDispatcherWithMC2(MoETokenDispatcher[MoEMC2CombineMetadata]):
             "moe_expert_num": self.moe_expert_num,
             "global_bs": self.global_bs,
         }
-        if self.spec_k_enabled:
+        if combine_metadata.route_active_mask is not None:
             kwargs_mc2["x_active_mask"] = combine_metadata.route_active_mask
         elif self.global_bs == 0:
             kwargs_mc2["x_active_mask"] = combine_metadata.mc2_mask
@@ -392,8 +397,8 @@ class TokenDispatcherWithAllGather(MoETokenDispatcher[MoEAllGatherCombineMetadat
         # is quantized again inside the MLP path.
         with_quant = token_dispatch_input.quant.dispatch_with_quant and quant_type != QuantType.W8A8FP
         with_quant = with_quant and not unquantized_mxfp4_dispatch
-        spec_k_enabled = get_ascend_config().spec_k_config.enabled is True
-        if spec_k_enabled and quant_type == QuantType.W4A8:
+        spec_k_active = is_spec_k_active()
+        if spec_k_active and quant_type == QuantType.W4A8:
             # Spec-K marks dropped routes with an out-of-range expert id. The
             # W4A8 quantized init-routing kernel does not accept that sentinel,
             # while the BF16 routing path treats it as an inactive route. Keep

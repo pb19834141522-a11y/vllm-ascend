@@ -1,4 +1,5 @@
 import unittest
+from collections import deque
 from types import SimpleNamespace
 from unittest.mock import MagicMock, call, patch
 
@@ -17,10 +18,11 @@ from vllm.v1.outputs import DraftTokenIds
 
 from vllm_ascend.attention.utils import get_sfa_qsfa_packed_head_dim
 from vllm_ascend.core.kv_cache_interface import AscendMLAAttentionSpec, AscendSFAIndexerCacheSpec
-from vllm_ascend.spec_decode.spec_k import SpecKHistoryUpdate
+from vllm_ascend.spec_decode.spec_k import SpecKHistoryUpdate, SpecKRequestState
 from vllm_ascend.utils import AscendDeviceType
 from vllm_ascend.worker.model_runner_v1 import (
     NPUModelRunner,
+    _AsyncSpecKHistoryCopy,
     _AsyncSpecKStep,
 )
 
@@ -596,7 +598,25 @@ class TestNPUModelRunnerOutputTokenIds(unittest.TestCase):
         runner.vllm_config = MagicMock()
         runner.model_config = MagicMock()
         runner.use_compress = False
+        runner.use_async_scheduling = False
+        runner._spec_k_defer_history = False
+        runner._spec_k_history_free = []
+        runner._spec_k_history_pending = deque()
         return runner
+
+    @staticmethod
+    def _buffer(size, dtype=torch.int64, device="cpu"):
+        cpu = torch.empty(size, dtype=dtype)
+        gpu = torch.empty(size, dtype=dtype, device=device)
+        return SimpleNamespace(
+            cpu=cpu, np=cpu.numpy(), gpu=gpu,
+            copy_to_gpu=lambda n: gpu[:n].copy_(cpu[:n]),
+        )
+
+    def _init_budget_indices(self, runner, size=8, device="cpu"):
+        runner._spec_k_async_source_indices = self._buffer(size, device=device)
+        runner._spec_k_async_destination_indices = self._buffer(size, device=device)
+        runner._spec_k_budget_arange = np.arange(4, dtype=np.int64)
 
     @patch("vllm_ascend.worker.model_runner_v1.get_ascend_config")
     @patch("vllm_ascend.worker.model_runner_v1.lmhead_tp_enable")
@@ -865,6 +885,7 @@ class TestNPUModelRunnerOutputTokenIds(unittest.TestCase):
 
     def test_async_spec_k_remaps_npu_budgets_after_request_reordering(self):
         runner = self._build_runner()
+        self._init_budget_indices(runner)
         runner._spec_k_enabled = True
         runner.use_async_scheduling = True
         runner._spec_k_policy = SimpleNamespace(base_top_k=6)
@@ -894,6 +915,8 @@ class TestNPUModelRunnerOutputTokenIds(unittest.TestCase):
             ],
             dtype=torch.int32,
         )
+        runner._spec_k_defer_history = True
+        runner._drain_spec_k_history = MagicMock()
         scheduler_output = SimpleNamespace(
             scheduled_spec_decode_tokens={
                 "req1": [-1, -1, -1],
@@ -903,7 +926,7 @@ class TestNPUModelRunnerOutputTokenIds(unittest.TestCase):
 
         runner._prepare_spec_k_input_top_ks(
             scheduler_output,
-            positions=np.arange(8, dtype=np.int64),
+            positions=np.arange(100, 108, dtype=np.int64),
             num_scheduled_tokens=np.array([4, 4], dtype=np.int32),
             total_num_scheduled_tokens=8,
         )
@@ -914,6 +937,114 @@ class TestNPUModelRunnerOutputTokenIds(unittest.TestCase):
         )
         # Async counters are committed from the exact deferred NPU mirror.
         self.assertEqual(runner._spec_k_target_token_count, 0)
+        runner._drain_spec_k_history.assert_not_called()
+
+    def test_async_spec_k_recompute_flushes_history_before_budget_overlay(self):
+        runner = self._build_runner()
+        self._init_budget_indices(runner)
+        runner.use_async_scheduling = True
+        runner._spec_k_defer_history = True
+        runner._spec_k_policy = SimpleNamespace(base_top_k=6)
+        state = SpecKRequestState(base_top_k=6)
+        runner._spec_k_request_states = {"req0": state}
+        runner._drain_spec_k_history = MagicMock(side_effect=lambda **_: state.finalize_step_values(
+            np.array([5, 4], dtype=np.int32), 6,
+        ))
+        runner.input_batch = SimpleNamespace(
+            req_ids=["req0"], prev_req_id_to_index={"req0": 0},
+            num_tokens_no_spec=np.array([103]),
+        )
+        runner.requests = {"req0": SimpleNamespace(num_prompt_tokens=100)}
+        runner._spec_k_input_top_ks = self._buffer(5, torch.int32)
+        runner._spec_k_draft_top_ks = torch.tensor([[2, 3, 6]], dtype=torch.int32)
+        runner._prepare_spec_k_input_top_ks(
+            SimpleNamespace(scheduled_spec_decode_tokens={"req0": [-1, -1]}),
+            np.arange(100, 105), np.array([5]), 5,
+        )
+        runner._drain_spec_k_history.assert_called_once_with(blocking=True)
+        self.assertEqual(runner._spec_k_input_top_ks.gpu.tolist(), [5, 4, 2, 3, 6])
+
+    def test_async_spec_k_history_waits_for_ready_snapshot_in_order(self):
+        runner = self._build_runner()
+        runner._spec_k_policy = SimpleNamespace(base_top_k=6)
+        runner._spec_k_request_states = {}
+        runner._spec_k_target_top_k_sum = 0
+        runner._spec_k_target_token_count = 0
+        snapshots = []
+        for budgets, next_k, sampled_count in (([6, 3, 4, 6], 5, 3), ([5, 2, 3, 6], 6, 2)):
+            snapshots.append(_AsyncSpecKHistoryCopy(
+                input_top_ks=torch.tensor(budgets), next_top_ks=torch.tensor([next_k]),
+                valid_counts=torch.tensor([sampled_count]),
+                event=MagicMock(query=MagicMock(return_value=False)),
+                step=_AsyncSpecKStep(["req0"], [4], 4, 3),
+            ))
+        runner._spec_k_history_pending.extend(snapshots)
+        runner._drain_spec_k_history()
+        self.assertEqual(runner._spec_k_target_token_count, 0)
+        snapshots[1].event.query.return_value = True
+        runner._drain_spec_k_history()
+        self.assertEqual(runner._spec_k_target_token_count, 0)
+        snapshots[0].event.query.return_value = True
+        runner._drain_spec_k_history()
+        self.assertEqual(runner._spec_k_target_top_k_sum, 35)
+        self.assertEqual(runner._spec_k_target_token_count, 8)
+        self.assertEqual(runner._spec_k_request_states["req0"].output_top_ks.tolist(), [3, 4, 5, 2, 6])
+        self.assertFalse(runner._spec_k_history_pending)
+        self.assertEqual(len(runner._spec_k_history_free), 2)
+        for snapshot in snapshots:
+            snapshot.event.synchronize.assert_not_called()
+        # Reusing a host mirror must not change already committed history.
+        snapshots[0].input_top_ks.fill_(99)
+        self.assertEqual(runner._spec_k_request_states["req0"].output_top_ks.tolist(), [3, 4, 5, 2, 6])
+
+    def test_async_spec_k_history_blocks_only_when_requested(self):
+        runner = self._build_runner()
+        runner._spec_k_policy = SimpleNamespace(base_top_k=6)
+        runner._spec_k_request_states = {}
+        runner._spec_k_target_top_k_sum = 0
+        runner._spec_k_target_token_count = 0
+        snapshot = _AsyncSpecKHistoryCopy(
+            input_top_ks=torch.tensor([6, 3]), next_top_ks=torch.tensor([6]),
+            valid_counts=torch.tensor([0]), event=MagicMock(),
+            step=_AsyncSpecKStep(["req0"], [2], 2, 1),
+        )
+        runner._spec_k_history_pending.append(snapshot)
+        runner._drain_spec_k_history(blocking=True)
+        snapshot.event.synchronize.assert_called_once_with()
+        self.assertEqual(runner._spec_k_target_top_k_sum, 9)
+        self.assertFalse(runner._spec_k_request_states)
+
+    def test_async_spec_k_history_copy_protects_device_sources(self):
+        if not torch.npu.is_available():
+            self.skipTest("requires NPU stream/event ordering")
+        runner = self._build_runner()
+        runner._spec_k_policy = SimpleNamespace(base_top_k=6)
+        runner._spec_k_request_states = {}
+        runner._spec_k_target_top_k_sum = 0
+        runner._spec_k_target_token_count = 0
+        runner.input_batch = SimpleNamespace(req_ids=["req0"])
+        runner.draft_token_ids_copy_stream = torch.npu.Stream()
+        snapshot = _AsyncSpecKHistoryCopy(
+            input_top_ks=torch.empty(4, dtype=torch.int32, pin_memory=True),
+            next_top_ks=torch.empty(1, dtype=torch.int32, pin_memory=True),
+            valid_counts=torch.empty(1, dtype=torch.int64, pin_memory=True),
+            event=torch.npu.Event(),
+        )
+        runner._spec_k_history_free.append(snapshot)
+        runner._spec_k_input_top_ks = SimpleNamespace(gpu=torch.tensor([6, 3, 4, 6], dtype=torch.int32, device="npu"))
+        next_top_ks = torch.tensor([[5, 2, 3, 6]], dtype=torch.int32, device="npu")
+        valid_counts = torch.tensor([3], dtype=torch.int64, device="npu")
+        runner._stage_spec_k_history_copy(
+            SimpleNamespace(total_num_scheduled_tokens=4, num_scheduled_tokens={"req0": 4}),
+            valid_counts, next_top_ks,
+        )
+        runner._spec_k_input_top_ks.gpu.fill_(99)
+        next_top_ks.fill_(99)
+        valid_counts.zero_()
+        torch.npu.synchronize()
+        runner._drain_spec_k_history()
+        self.assertEqual(runner._spec_k_target_top_k_sum, 19)
+        self.assertEqual(runner._spec_k_request_states["req0"].output_top_ks.tolist(), [3, 4, 5])
 
     def test_async_dynamic_spec_trims_placeholders_by_request_id(self):
         runner = self._build_runner()
@@ -1073,6 +1204,7 @@ class TestNPUModelRunnerDebugger(unittest.TestCase):
         runner.model = MagicMock()
         runner.model_config = MagicMock()
         runner.model_config.enforce_eager = False
+        runner._spec_k_enabled = False
         runner._debugger_started = True
         runner._debugger_step_dummy_data_before_execute = False
         runner.use_compress = False

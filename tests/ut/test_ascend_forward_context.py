@@ -540,7 +540,7 @@ def test_spec_k_draft_keeps_existing_communication_path(monkeypatch):
         ep_world_size=8,
         spec_k_enabled=True,
     )
-    assert afc.select_moe_comm_method(8, _make_vllm_config(), is_draft_model=True) == MoECommType.ALLGATHER
+    assert afc.select_moe_comm_method(8, _make_vllm_config(), is_draft_model=True) == MoECommType.MC2
 
 
 def test_spec_k_hierarchy_comm_falls_back_to_allgather(monkeypatch):

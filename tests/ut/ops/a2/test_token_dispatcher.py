@@ -124,8 +124,9 @@ class TestTokenDispatcherWithMC2(TestBase):
         # Mock get_forward_context().mc2_mask
         self.forward_context = MagicMock()
         self.forward_context.mc2_mask = torch.tensor([1, 0, 1])
+        self.forward_context.spec_k_active = False
         self.forward_context_patch = patch(
-            "vllm.forward_context.get_forward_context", return_value=self.forward_context
+            "vllm_ascend.ascend_forward_context.get_forward_context", return_value=self.forward_context
         )
         self.forward_context_patch.start()
 
@@ -236,6 +237,7 @@ class TestTokenDispatcherWithMC2(TestBase):
             return_value=ascend_config,
         ):
             dispatcher = TokenDispatcherWithMC2(top_k=3, num_experts=8)
+        self.forward_context.spec_k_active = True
 
         topk_ids = torch.tensor([[1, 2, 3], [0, 2, 4]], dtype=torch.int32)
         token_input = build_token_dispatch_input_fixture(
@@ -265,6 +267,29 @@ class TestTokenDispatcherWithMC2(TestBase):
         )
         self.assertIs(combine_kwargs["x_active_mask"], dispatch_kwargs["x_active_mask"])
         self.assertIs(combine_kwargs["expert_ids"], dispatch_kwargs["expert_ids"])
+
+    def test_spec_k_draft_mc2_keeps_baseline_masking(self):
+        ascend_config = MagicMock()
+        ascend_config.spec_k_config.enabled = True
+        ascend_config.enable_mc2_hierarchy_comm = False
+        with patch(
+            "vllm_ascend.ops.fused_moe.token_dispatcher.get_ascend_config",
+            return_value=ascend_config,
+        ):
+            dispatcher = TokenDispatcherWithMC2(top_k=3, num_experts=8)
+        self.forward_context.spec_k_active = False
+
+        mc2_mask = torch.tensor([True, False])
+        token_input = build_token_dispatch_input_fixture(
+            hidden_states=torch.randn(2, 128),
+            topk_weights=torch.tensor([[0.6, 0.0, 0.4], [1.0, 0.0, 0.0]]),
+            topk_ids=torch.tensor([[1, 2, 3], [0, 2, 4]], dtype=torch.int32),
+            expert_map=torch.arange(8),
+            mc2_mask=mc2_mask,
+        )
+
+        dispatch_kwargs = dispatcher.get_dispatch_mc2_kwargs(token_input)
+        self.assertIs(dispatch_kwargs["x_active_mask"], mc2_mask)
 
     def test_get_dispatch_mc2_kwargs_without_quant(self):
         hidden_states = torch.randn(10, 128)
@@ -527,6 +552,10 @@ def test_allgather_w4a8_spec_k_handles_invalid_routes():
             "vllm_ascend.ops.fused_moe.token_dispatcher.DeviceOperator.npu_moe_init_routing",
             return_value=init_routing_output,
         ) as mock_init_routing,
+        patch(
+            "vllm_ascend.ascend_forward_context.get_forward_context",
+            return_value=SimpleNamespace(spec_k_active=True),
+        ),
     ):
         output = dispatcher.token_dispatch(token_dispatch_input)
 

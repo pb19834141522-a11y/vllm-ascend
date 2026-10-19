@@ -1,0 +1,32 @@
+{
+  "purpose": "Frozen DSv4 Spec-K source before V4.1 migration; not an upstream PR.",
+  "created_utc": "2026-10-19T03:25:56.958090+00:00",
+  "vllm": "568afb3a13806beb53bb2e6bd518269357b237c0",
+  "vllm_ascend_parent": "ef855de30335645e1ff9de27282184ac7ef0e8e3",
+  "ascend_patch_sha256": "f9c9db390defe48f3875da5fd039ce730ecf4061208a6c20255105cdf6baf522",
+  "changed_files": [
+    "tests/ut/ops/a2/test_token_dispatcher.py",
+    "tests/ut/spec_decode/test_dspark_proposer.py",
+    "tests/ut/spec_decode/test_spec_k.py",
+    "tests/ut/test_ascend_forward_context.py",
+    "tests/ut/worker/a2/test_model_runner_v1.py",
+    "vllm_ascend/ascend_forward_context.py",
+    "vllm_ascend/ops/fused_moe/moe_comm_method.py",
+    "vllm_ascend/ops/fused_moe/token_dispatcher.py",
+    "vllm_ascend/spec_decode/spec_k.py",
+    "vllm_ascend/worker/model_runner_v1.py"
+  ],
+  "model": "/home/models/DeepSeek-V4-Flash-0731-w4a8",
+  "parallel": "TP1 DP8 EP8",
+  "speculative": "DSpark fixed 7 draft tokens, target FULL_DECODE_ONLY, draft eager",
+  "thresholds": [
+    128,
+    128,
+    128
+  ],
+  "experiment_root": "/home/p00948912/vllm_profile/tp1_dp8_ep8_batch_scaling_20261017_0923",
+  "completed_validation": "Batch64: warmup + 3 formal runs per case and paired 8-rank delayed profiles; same source diff fingerprint.",
+  "archive_checks": "git diff --check; parse all ten changed Python files; compare archived blob bytes to current working files.",
+  "limitations": "No additional unit/NPU performance run for this archival operation. Batch96/128 paired experiments remain incomplete and paused.",
+  "source_checkouts_unchanged": true
+}

@@ -22,7 +22,7 @@ import math
 import os
 import sys
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from collections.abc import Callable
 from contextlib import contextmanager, nullcontext
 from copy import copy, deepcopy
@@ -221,6 +221,7 @@ AttnMetadataDict: TypeAlias = dict[str, AttentionMetadata]
 PerLayerAttnMetadata: TypeAlias = list[AttnMetadataDict] | AttnMetadataDict
 
 SEQ_LEN_WITH_MAX_PA_WORKSPACE = 6144
+SPEC_K_HISTORY_COPY_SLOTS = 4
 
 
 @dataclass(slots=True)
@@ -232,6 +233,18 @@ class _AsyncSpecKStep:
     total_num_scheduled_tokens: int
     draft_width: int
     has_dynamic_verify_lengths: bool = False
+
+
+@dataclass(slots=True)
+class _AsyncSpecKHistoryCopy:
+    """Reusable host mirrors with a private completion event and source lifetime."""
+
+    input_top_ks: torch.Tensor
+    next_top_ks: torch.Tensor
+    valid_counts: torch.Tensor
+    event: Any
+    step: _AsyncSpecKStep | None = None
+    device_refs: tuple[torch.Tensor, ...] = ()
 
 
 @dataclass
@@ -359,6 +372,9 @@ class NPUModelRunner(GPUModelRunner):
         self._spec_k_async_valid_counts_cpu: torch.Tensor | None = None
         self._spec_k_async_verify_lengths_cpu: torch.Tensor | None = None
         self._spec_k_async_pending_step: _AsyncSpecKStep | None = None
+        self._spec_k_defer_history = False
+        self._spec_k_history_free: list[_AsyncSpecKHistoryCopy] = []
+        self._spec_k_history_pending: deque[_AsyncSpecKHistoryCopy] = deque()
         self._spec_k_async_original_num_spec_per_req: dict[str, int] = {}
         self._spec_k_draft_entropies_cpu: torch.Tensor | None = None
         self._spec_k_raw_draft_entropies_cpu: torch.Tensor | None = None
@@ -806,6 +822,15 @@ class NPUModelRunner(GPUModelRunner):
             pin_memory=self.pin_memory,
         )
         if self.use_async_scheduling:
+            self._spec_k_async_source_indices = self._make_buffer(
+                self.max_num_tokens, dtype=torch.int64,
+            )
+            self._spec_k_async_destination_indices = self._make_buffer(
+                self.max_num_tokens, dtype=torch.int64,
+            )
+            self._spec_k_budget_arange = np.arange(
+                self.num_spec_tokens + 1, dtype=np.int64,
+            )
             # The target forward consumes token_top_ks directly on NPU.  These
             # pinned mirrors are only for deferred request-history accounting
             # and benchmark metrics; they are never copied back to drive MoE
@@ -837,6 +862,31 @@ class NPUModelRunner(GPUModelRunner):
             dynamic_spec_config = getattr(
                 self.ascend_config, "dynamic_spec_config", None
             )
+            # Dynamic verify lengths and lossless diagnostics retain their
+            # synchronous mirror lifetime. Fixed-length routing consumes only
+            # device budgets, so its history can be collected when ready.
+            self._spec_k_defer_history = (
+                getattr(dynamic_spec_config, "method", None) is None
+                and getattr(self.ascend_config.spec_k_config,
+                            "entropy_diagnostics_dir", None) is None
+            )
+            if self._spec_k_defer_history:
+                for _ in range(SPEC_K_HISTORY_COPY_SLOTS):
+                    self._spec_k_history_free.append(_AsyncSpecKHistoryCopy(
+                        input_top_ks=torch.empty(
+                            self.max_num_tokens, dtype=torch.int32,
+                            device="cpu", pin_memory=self.pin_memory,
+                        ),
+                        next_top_ks=torch.empty(
+                            self.max_num_reqs, dtype=torch.int32,
+                            device="cpu", pin_memory=self.pin_memory,
+                        ),
+                        valid_counts=torch.empty(
+                            self.max_num_reqs, dtype=torch.int64,
+                            device="cpu", pin_memory=self.pin_memory,
+                        ),
+                        event=torch.npu.Event(),
+                    ))
             if getattr(dynamic_spec_config, "method", None) == "dspark":
                 logger.info_once(
                     "Asynchronous dynamic DSpark + Spec-K is enabled; "
@@ -846,8 +896,8 @@ class NPUModelRunner(GPUModelRunner):
             else:
                 logger.info_once(
                     "Asynchronous Spec-K NPU budget path is enabled; CPU "
-                    "mirrors are used only for deferred metrics and request "
-                    "history."
+                    "history collection is deferred for fixed-length decode "
+                    "without entropy diagnostics."
                 )
         diagnostics_dir = getattr(
             self.ascend_config.spec_k_config,
@@ -922,29 +972,47 @@ class NPUModelRunner(GPUModelRunner):
 
         if self._spec_k_input_top_ks is None:
             raise RuntimeError("Spec-K input buffer is not initialized.")
-        output = self._spec_k_input_top_ks.cpu[:total_num_scheduled_tokens]
-        output.fill_(policy.base_top_k)
+        output = self._spec_k_input_top_ks.cpu.numpy()[:total_num_scheduled_tokens]
+        output.fill(policy.base_top_k)
         offset = 0
         scheduled_drafts = scheduler_output.scheduled_spec_decode_tokens
+        previous_rows = self.input_batch.prev_req_id_to_index if self.use_async_scheduling else None
+        draft_top_ks = self._spec_k_draft_top_ks
         for req_index, req_id in enumerate(self.input_batch.req_ids):
             count = int(num_scheduled_tokens[req_index])
             end = offset + count
             if count == 0:
                 continue
             request = self.requests[req_id]
+            # The final speculative rows are replaced directly from the prior
+            # NPU budgets below. Their optimistic CPU positions need no history
+            # lookup. Prompt rows always retain the model's full top-k.
+            history_end = end
+            if (self.use_async_scheduling and torch.is_tensor(draft_top_ks)
+                    and previous_rows and req_id in previous_rows
+                    and scheduled_drafts.get(req_id)):
+                history_end -= min(
+                    len(scheduled_drafts[req_id]) + 1, count,
+                    draft_top_ks.shape[1],
+                )
+            if not np.any(positions[offset:history_end] >= request.num_prompt_tokens):
+                offset = end
+                continue
+            if getattr(self, "_spec_k_defer_history", False):
+                # Historical/recomputed output rows need the exact committed
+                # history. This fallback is not used by steady decode.
+                self._drain_spec_k_history(blocking=True)
             state = self._get_or_create_spec_k_state(req_id)
             if not self.use_async_scheduling:
                 state.reconcile_output_length(len(request.output_token_ids))
-            output[offset:end].copy_(
-                state.top_ks_for_positions(
-                    positions[offset:end],
-                    num_prompt_tokens=request.num_prompt_tokens,
-                    pending_draft_start_position=int(
-                        self.input_batch.num_tokens_no_spec[req_index]
-                    )
-                    - 1,
-                    use_pending_draft=bool(scheduled_drafts.get(req_id)),
-                )
+            state.write_top_ks_for_positions(
+                output[offset:history_end],
+                positions[offset:history_end],
+                num_prompt_tokens=request.num_prompt_tokens,
+                pending_draft_start_position=int(
+                    self.input_batch.num_tokens_no_spec[req_index]
+                ) - 1,
+                use_pending_draft=bool(scheduled_drafts.get(req_id)),
             )
             offset = end
         self._spec_k_input_top_ks.copy_to_gpu(total_num_scheduled_tokens)
@@ -956,7 +1024,7 @@ class NPUModelRunner(GPUModelRunner):
         else:
             # Count every token row actually submitted to the target. This is
             # the Target Avg Top-K compute scope, including rejected drafts.
-            self._spec_k_target_top_k_sum += int(output.sum().item())
+            self._spec_k_target_top_k_sum += int(output.sum(dtype=np.int64))
             self._spec_k_target_token_count += total_num_scheduled_tokens
 
     def _apply_async_spec_k_input_top_ks(
@@ -983,9 +1051,10 @@ class NPUModelRunner(GPUModelRunner):
         if not scheduled_drafts or not prev_req_id_to_index:
             return
 
-        destination_indices: list[int] = []
-        previous_rows: list[int] = []
-        draft_positions: list[int] = []
+        source_indices = self._spec_k_async_source_indices
+        destination_indices = self._spec_k_async_destination_indices
+        arange = self._spec_k_budget_arange
+        num_indices = 0
         offset = 0
         max_budget_positions = draft_top_ks.shape[1]
         for req_index, req_id in enumerate(self.input_batch.req_ids):
@@ -1001,35 +1070,22 @@ class NPUModelRunner(GPUModelRunner):
                 # The speculative span is the final ``draft_len + 1`` rows of
                 # this request: anchor/current token followed by draft tokens.
                 destination_start = offset + count - num_budget_positions
-                destination_indices.extend(
-                    range(
-                        destination_start,
-                        destination_start + num_budget_positions,
-                    )
+                end = num_indices + num_budget_positions
+                source_indices.np[num_indices:end] = (
+                    prev_row * max_budget_positions + arange[:num_budget_positions]
                 )
-                previous_rows.extend([prev_row] * num_budget_positions)
-                draft_positions.extend(range(num_budget_positions))
+                destination_indices.np[num_indices:end] = (
+                    destination_start + arange[:num_budget_positions]
+                )
+                num_indices = end
             offset += count
 
-        if not destination_indices:
+        if not num_indices:
             return
 
-        destination = torch.tensor(
-            destination_indices,
-            dtype=torch.int64,
-            device=self.device,
-        )
-        source_rows = torch.tensor(
-            previous_rows,
-            dtype=torch.int64,
-            device=self.device,
-        )
-        source_positions = torch.tensor(
-            draft_positions,
-            dtype=torch.int64,
-            device=self.device,
-        )
-        budgets = draft_top_ks[source_rows, source_positions].to(torch.int32)
+        destination = destination_indices.copy_to_gpu(num_indices)
+        source = source_indices.copy_to_gpu(num_indices)
+        budgets = torch.index_select(draft_top_ks.reshape(-1), 0, source)
         input_top_ks.gpu.index_copy_(0, destination, budgets)
 
     def _stage_async_spec_k_step(
@@ -1042,6 +1098,11 @@ class NPUModelRunner(GPUModelRunner):
         raw_entropies: torch.Tensor | None,
     ) -> None:
         """Mirror async Spec-K bookkeeping to pinned CPU without routing on it."""
+        if getattr(self, "_spec_k_defer_history", False):
+            self._stage_spec_k_history_copy(
+                scheduler_output, valid_sampled_token_counts, next_draft_top_ks,
+            )
+            return
         if self._spec_k_async_pending_step is not None:
             raise RuntimeError(
                 "Previous asynchronous Spec-K step was not consumed before "
@@ -1141,6 +1202,88 @@ class NPUModelRunner(GPUModelRunner):
             has_dynamic_verify_lengths=has_dynamic_verify_lengths,
         )
 
+    def _stage_spec_k_history_copy(
+        self,
+        scheduler_output: "SchedulerOutput",
+        valid_counts: torch.Tensor,
+        next_top_ks: torch.Tensor,
+    ) -> None:
+        """Queue an owned snapshot, without blocking preparation of the next step."""
+        self._drain_spec_k_history(blocking=False)
+        if not self._spec_k_history_free:
+            # Bounded backpressure if the host gets several steps ahead. Never
+            # overwrite an in-flight mirror or let its source storage expire.
+            self._drain_spec_k_history(blocking=True)
+        snapshot = self._spec_k_history_free.pop()
+        req_ids = self.input_batch.req_ids.copy()
+        num_reqs = len(req_ids)
+        total_tokens = scheduler_output.total_num_scheduled_tokens
+        snapshot.step = _AsyncSpecKStep(
+            req_ids=req_ids,
+            num_scheduled_tokens=[scheduler_output.num_scheduled_tokens[r] for r in req_ids],
+            total_num_scheduled_tokens=total_tokens,
+            draft_width=next_top_ks.shape[1] - 1,
+        )
+        snapshot.device_refs = (next_top_ks, valid_counts)
+        default_stream = torch.npu.current_stream()
+        copy_stream = self.draft_token_ids_copy_stream
+        with torch.npu.stream(copy_stream):
+            copy_stream.wait_stream(default_stream)
+            snapshot.input_top_ks[:total_tokens].copy_(
+                self._spec_k_input_top_ks.gpu[:total_tokens], non_blocking=True,
+            )
+            snapshot.next_top_ks[:num_reqs].copy_(next_top_ks[:num_reqs, 0], non_blocking=True)
+            snapshot.valid_counts[:num_reqs].copy_(valid_counts[:num_reqs], non_blocking=True)
+            snapshot.event.record()
+        # Device-side dependency only: later writes may reuse the source
+        # buffers after their D2H reads. The CPU is free to prepare inputs.
+        default_stream.wait_event(snapshot.event)
+        self._spec_k_history_pending.append(snapshot)
+
+    def _commit_spec_k_history(
+        self,
+        step: _AsyncSpecKStep,
+        input_top_ks: np.ndarray,
+        next_top_ks: np.ndarray,
+        valid_counts: np.ndarray,
+    ) -> None:
+        counts = valid_counts[:len(step.req_ids)]
+        target_counts = np.asarray(step.num_scheduled_tokens)
+        if np.any((counts < 0) | (counts > target_counts)):
+            raise RuntimeError("Asynchronous Spec-K sampled-token count exceeds its target span.")
+        self._spec_k_target_top_k_sum += int(
+            input_top_ks[:step.total_num_scheduled_tokens].sum(dtype=np.int64)
+        )
+        self._spec_k_target_token_count += step.total_num_scheduled_tokens
+        offset = 0
+        for row, (req_id, target_count) in enumerate(zip(step.req_ids, step.num_scheduled_tokens)):
+            sampled_count = int(counts[row])
+            if sampled_count:
+                state = self._get_or_create_spec_k_state(req_id)
+                state.finalize_step_values(
+                    input_top_ks[offset + 1:offset + sampled_count],
+                    int(next_top_ks[row]),
+                )
+            offset += target_count
+
+    def _drain_spec_k_history(self, blocking: bool = False) -> None:
+        """Commit snapshots in order, reading host data only after completion."""
+        while self._spec_k_history_pending:
+            snapshot = self._spec_k_history_pending[0]
+            if blocking:
+                snapshot.event.synchronize()
+            elif not snapshot.event.query():
+                break
+            assert snapshot.step is not None
+            self._commit_spec_k_history(
+                snapshot.step, snapshot.input_top_ks.numpy(),
+                snapshot.next_top_ks.numpy(), snapshot.valid_counts.numpy(),
+            )
+            self._spec_k_history_pending.popleft()
+            snapshot.step = None
+            snapshot.device_refs = ()
+            self._spec_k_history_free.append(snapshot)
+
     def _trim_async_dynamic_spec_tokens(
         self,
         scheduler_output: "SchedulerOutput",
@@ -1191,8 +1334,13 @@ class NPUModelRunner(GPUModelRunner):
         self._spec_k_async_original_num_spec_per_req = original_lengths
         return True
 
-    def _consume_async_spec_k_step(self, event_synchronized: bool = False) -> None:
+    def _consume_async_spec_k_step(
+        self, event_synchronized: bool = False, blocking: bool = True,
+    ) -> None:
         """Commit the prior async step's history and exact benchmark counters."""
+        if getattr(self, "_spec_k_defer_history", False):
+            self._drain_spec_k_history(blocking=blocking)
+            return
         pending = self._spec_k_async_pending_step
         if pending is None:
             return
@@ -1247,37 +1395,10 @@ class NPUModelRunner(GPUModelRunner):
                 top_ks=top_ks_cpu[: len(pending.req_ids), : width + 1],
                 selected_lengths=selected_lengths,
             )
-        target_top_ks = input_top_ks_cpu[: pending.total_num_scheduled_tokens]
-        self._spec_k_target_top_k_sum += int(target_top_ks.sum().item())
-        self._spec_k_target_token_count += pending.total_num_scheduled_tokens
-
-        offset = 0
-        for row, (req_id, target_count) in enumerate(
-            zip(pending.req_ids, pending.num_scheduled_tokens)
-        ):
-            sampled_count = int(valid_counts_cpu[row].item())
-            if sampled_count > target_count:
-                raise RuntimeError(
-                    "Asynchronous Spec-K sampled-token count exceeds its "
-                    f"target span for request {req_id!r}: "
-                    f"{sampled_count} > {target_count}."
-                )
-            if sampled_count > 0:
-                num_accepted_drafts = sampled_count - 1
-                accepted_top_ks = input_top_ks_cpu[
-                    offset + 1 : offset + 1 + num_accepted_drafts
-                ].clone()
-                state = self._get_or_create_spec_k_state(req_id)
-                state.finalize_step(
-                    SpecKHistoryUpdate(
-                        new_output_length=(
-                            state.output_top_ks.shape[0] + sampled_count
-                        ),
-                        accepted_top_ks=accepted_top_ks,
-                    ),
-                    next_top_ks_cpu[row],
-                )
-            offset += target_count
+        self._commit_spec_k_history(
+            pending, input_top_ks_cpu.numpy(), next_top_ks_cpu.numpy(),
+            valid_counts_cpu.numpy(),
+        )
 
         self._spec_k_async_pending_step = None
 
@@ -1408,6 +1529,12 @@ class NPUModelRunner(GPUModelRunner):
         # Temporary rewind guard for KV-load-failure recompute.
         # This can be removed after the upstream fix is merged.
         req_data = scheduler_output.scheduled_cached_reqs
+
+        if (self._spec_k_enabled and getattr(self, "_spec_k_defer_history", False)
+                and scheduler_output.finished_req_ids):
+            # Commit the last accepted budgets before removing a finished
+            # request or reporting its exact output/target average top-k.
+            self._drain_spec_k_history(blocking=True)
 
         if self.use_async_scheduling:
             for i, req_id in enumerate(req_data.req_ids):
@@ -2744,7 +2871,8 @@ class NPUModelRunner(GPUModelRunner):
                         self._trim_async_dynamic_spec_tokens(scheduler_output)
                     )
                     self._consume_async_spec_k_step(
-                        event_synchronized=dynamic_lengths_ready
+                        event_synchronized=dynamic_lengths_ready,
+                        blocking=False,
                     )
                     num_scheduled_tokens = (
                         scheduler_output.total_num_scheduled_tokens
