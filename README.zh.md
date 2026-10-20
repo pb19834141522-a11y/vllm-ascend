@@ -125,3 +125,7 @@ vllm-ascend有主干分支和开发分支。
 ## 许可证
 
 Apache 许可证 2.0，如 [LICENSE](./LICENSE) 文件中所示。
+
+## CPU/NPU 混合 MoE 分享入口
+
+[9334 使用指南：版本、权重、后端编译和运行](docs/cpu_moe/README.zh.md)

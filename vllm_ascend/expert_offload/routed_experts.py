@@ -57,7 +57,23 @@ def apply_offloaded_experts(layer, hidden_states, topk_weights, topk_ids, router
         routed_scaling_factor=getattr(router, "routed_scaling_factor", 1.0),
         is_hash_routed=layer.tid2eid is not None,
     )
-    if layer.enable_multi_card:
+    hybrid_plan = None
+    if not layer.enable_multi_card:
+        from vllm_ascend.expert_offload.hybrid_executor import maybe_prepare_hybrid_routes
+
+        hybrid_plan = maybe_prepare_hybrid_routes(
+            layer,
+            hidden_states=hidden_states,
+            topk_ids=topk_ids,
+            topk_weights=topk_weights,
+            log2phy=layer.log2phy,
+            transfer_manager=mgr,
+        )
+    if hybrid_plan is not None:
+        topk_ids = hybrid_plan.npu_topk_ids
+        topk_weights = hybrid_plan.npu_topk_weights
+        prefill_regime = False
+    elif layer.enable_multi_card:
         mgr.update_weights_multi_card(
             layer,
             topk_ids,
@@ -71,7 +87,12 @@ def apply_offloaded_experts(layer, hidden_states, topk_weights, topk_ids, router
     else:
         mgr.update_weights(layer, topk_ids, layer.log2phy, topk_weights, hidden_states=hidden_states, **routing)
         prefill_regime = num_tokens > mgr.offload_threshold
-    use_prefill = prefill_regime and mgr._prefill_initialized and (layer.enable_multi_card or not mgr._skip_prefill)
+    use_prefill = (
+        hybrid_plan is None
+        and prefill_regime
+        and mgr._prefill_initialized
+        and (layer.enable_multi_card or not mgr._skip_prefill)
+    )
     dispatcher = comm.token_dispatcher
     saved = {}
     view = layer
@@ -110,7 +131,7 @@ def apply_offloaded_experts(layer, hidden_states, topk_weights, topk_ids, router
             )
         if hidden_states.dtype != torch.float8_e4m3fn:
             topk_weights = topk_weights.to(hidden_states.dtype)
-        if not use_prefill and num_tokens <= mgr.offload_threshold:
+        if hybrid_plan is None and not use_prefill and num_tokens <= mgr.offload_threshold:
             mgr.trigger_next_layer_prefetch(layer, hidden_states)
         result = layer.quant_method.apply(
             layer=view,
@@ -123,4 +144,6 @@ def apply_offloaded_experts(layer, hidden_states, topk_weights, topk_ids, router
     finally:
         for name, value in saved.items():
             setattr(dispatcher, name, value)
+    if hybrid_plan is not None:
+        result.cpu_expert_task = hybrid_plan.cpu_task
     return result

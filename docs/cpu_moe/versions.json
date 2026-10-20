@@ -1,0 +1,12 @@
+{
+  "date": "2026-10-20",
+  "branch": "share/cpu-moe-9334-20261020",
+  "vllm_commit": "ced6857afa0ea7b2e3f0846a62e1394e90f15607",
+  "vllm_ascend_base": "643ee9f69585c87b1bd52ad9c3fd02221eaa70d3",
+  "ktransformers_commit": "7d38786e561d5a763f4f68f600676d93465234c7",
+  "torch": "2.10.0+cpu",
+  "torch_npu": "2.10.0.post2",
+  "python": "3.11.10",
+  "cann": "9.1.0",
+  "validation": "90 passed; CPU and AscendC compilation passed; full lint unavailable (pre-commit missing); no end-to-end rerun"
+}
