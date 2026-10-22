@@ -1,0 +1,90 @@
+{
+  "passed": true,
+  "device": "Ascend910_9382",
+  "route_shapes": [
+    {
+      "rows": 1,
+      "wall_s": 2.7799687099904986,
+      "cache_variants": 1
+    },
+    {
+      "rows": 16,
+      "wall_s": 0.00020495000353548676,
+      "cache_variants": 1
+    },
+    {
+      "rows": 32,
+      "wall_s": 0.00016168000001925975,
+      "cache_variants": 1
+    },
+    {
+      "rows": 33,
+      "wall_s": 0.00016357000276912004,
+      "cache_variants": 1
+    },
+    {
+      "rows": 79,
+      "wall_s": 0.00016616999346297234,
+      "cache_variants": 1
+    },
+    {
+      "rows": 137,
+      "wall_s": 0.00019985999097116292,
+      "cache_variants": 1
+    },
+    {
+      "rows": 233,
+      "wall_s": 0.00016571000742260367,
+      "cache_variants": 1
+    },
+    {
+      "rows": 240,
+      "wall_s": 0.00019689000328071415,
+      "cache_variants": 1
+    },
+    {
+      "rows": 256,
+      "wall_s": 0.00016550999134778976,
+      "cache_variants": 1
+    },
+    {
+      "rows": 7,
+      "wall_s": 0.00013698999828193337,
+      "cache_variants": 1
+    },
+    {
+      "rows": 0,
+      "wall_s": 3.0130002414807677e-05,
+      "cache_variants": 1
+    }
+  ],
+  "prune_cache_variants": [
+    "/tmp/p00948912-spec-k-runtime-fix-20261022/gs_bYeinsz8lPT8FB-Re0ZIlFCDd56U9DsKm4PuqZ3w/_prune_routes.json"
+  ],
+  "route_graph_replay": true,
+  "metadata_graph_replay": true,
+  "metadata_kernel_parity": true,
+  "slot_metadata_40_groups_ms": {
+    "eager": [
+      18.51215001079254,
+      18.51495000300929,
+      18.77373000024818,
+      17.56362999731209,
+      16.619429996353574,
+      16.62794000003487
+    ],
+    "fused": [
+      5.953559986664914,
+      5.8653200103435665,
+      5.9062100044684485,
+      5.857060008565895,
+      5.899469993892126,
+      5.857550000655465
+    ]
+  },
+  "slot_metadata_median_ms": {
+    "eager": 18.037890004052315,
+    "fused": 5.882395002117846
+  },
+  "note": "Microbenchmark includes host enqueue and device completion; not an end-to-end model speedup."
+}

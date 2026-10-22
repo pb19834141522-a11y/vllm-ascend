@@ -1,0 +1,48 @@
+{
+  "source_model": "/home/models/DeepSeek-V4.1-Flash-1017-w4a8-Ascend",
+  "runtime_model": "/tmp/p00948912-dsv41-1017-runtime-20261021T081310Z",
+  "devices": [
+    0,
+    1,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+  ],
+  "port": 18829,
+  "container": "p00948912-dsv41-dev-20261019",
+  "tp": 8,
+  "dp": 1,
+  "ep": 8,
+  "num_draft": 7,
+  "max_num_seqs": 32,
+  "e2e_requests": 384,
+  "e2e_concurrency": 32,
+  "output_tokens": 1024,
+  "ignore_eos": true,
+  "seed": 42,
+  "profile_delay_steps": 100,
+  "profile_steps": 30,
+  "source_untouched": true,
+  "baseline_reference": "/home/p00948912/vllm_profile/dsv41_runtime_metadata_fix_pair_20261022_0126/baseline",
+  "spec_k_config": {
+    "enabled": true,
+    "ppl_thresholds": [
+      128,
+      128,
+      128
+    ],
+    "full_top_k_layer_range": [
+      0,
+      0
+    ],
+    "apply_last_token": false,
+    "log_stats_interval": 100
+  },
+  "mode": "topk",
+  "fix_validation": "/home/p00948912/dsv41_dev_20261019/runtime/spec_k_runtime_metadata_fix_20261022_011829",
+  "same_physical_devices_as_baseline": false,
+  "device_comparison_note": "Previous baseline used6,7,10,11,12,13,14,15; runtime parameters and code are unchanged. Hardware placement differs."
+}

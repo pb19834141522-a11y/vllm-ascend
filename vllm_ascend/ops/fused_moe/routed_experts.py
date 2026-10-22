@@ -21,16 +21,18 @@ from types import SimpleNamespace
 import torch
 import torch_npu
 from vllm.config import get_current_vllm_config
+from vllm.distributed import get_tensor_model_parallel_rank, get_tensor_model_parallel_world_size
 from vllm.distributed.utils import is_weak_contiguous
 from vllm.forward_context import get_forward_context
 from vllm.logger import logger
 from vllm.model_executor.layers.fused_moe import FusedMoERouter, RoutedExperts
 from vllm.model_executor.layers.fused_moe.config import FusedMoEConfig
 from vllm.model_executor.layers.fused_moe.unquantized_fused_moe_method import UnquantizedFusedMoEMethod
+from vllm.model_executor.models.utils import extract_layer_index
 from vllm.model_executor.utils import replace_parameter
 
 from vllm_ascend.ascend_config import get_ascend_config
-from vllm_ascend.ascend_forward_context import _EXTRA_CTX, use_cann_megamoe
+from vllm_ascend.ascend_forward_context import _EXTRA_CTX, MoECommType, use_cann_megamoe
 from vllm_ascend.device.hardware_profile import HardwareCapability, get_current_hardware_profile
 from vllm_ascend.eplb.adaptor.vllm_adaptor import VllmEplbAdaptor
 from vllm_ascend.eplb.core.eplb_utils import init_eplb_config
@@ -46,6 +48,7 @@ from vllm_ascend.ops.fused_moe.moe_comm_method import (
 )
 from vllm_ascend.ops.fused_moe.moe_utils import get_moe_num_logical_experts
 from vllm_ascend.quantization.quant_type import QuantType
+from vllm_ascend.spec_k import prune_fused_routes, shard_token_budgets
 from vllm_ascend.utils import ACL_FORMAT_FRACTAL_NZ, maybe_trans_nz
 
 
@@ -433,6 +436,14 @@ class AscendRoutedExperts(RoutedExperts):  # type: ignore[no-redef]
         self.mix_placement = getattr(ascend_config, "mix_placement", False)
         self.enable_npugraph_ex_static_kernel = ascend_config.ascend_compilation_config.enable_static_kernel
         self._use_v2_model_runner = bool(vllm_config.use_v2_model_runner)
+        self._spec_k_enabled = ascend_config.spec_k_config.enabled is True
+        self._spec_k_full_top_k = False
+        if self._spec_k_enabled and vllm_config.model_config.runner_type != "draft":
+            self._spec_k_full_top_k = ascend_config.spec_k_config.preserves_layer(
+                extract_layer_index(self.layer_name), vllm_config.model_config.hf_text_config.num_hidden_layers
+            )
+            if self.quant_type != QuantType.W4A8:
+                raise ValueError("Spec-K fused routing currently supports integer W4A8 target experts only")
         self.dynamic_eplb = False
         self.multi_stage = False
         self.load_counter = None
@@ -688,6 +699,19 @@ class AscendRoutedExperts(RoutedExperts):  # type: ignore[no-redef]
             )
             topk_ids = torch.argsort(random_matrix, dim=1)[:, : topk_ids.size(1)].to(topk_ids.dtype)
 
+        if self._spec_k_enabled and not self._spec_k_full_top_k and not _EXTRA_CTX.is_draft_model:
+            budgets = _EXTRA_CTX.token_top_ks
+            if budgets is not None:
+                if _EXTRA_CTX.moe_comm_type is not MoECommType.FUSED_MC2 or _EXTRA_CTX.use_mega_moe:
+                    raise RuntimeError("Spec-K target unexpectedly left the supported fused MC2 path")
+                local_budgets = shard_token_budgets(
+                    budgets,
+                    topk_ids.shape[0],
+                    get_tensor_model_parallel_world_size(),
+                    get_tensor_model_parallel_rank(),
+                    sequence_parallel=self.moe_config.is_sequence_parallel,
+                )
+                prune_fused_routes(topk_weights, topk_ids, local_budgets, self.moe_config.num_experts)
         return topk_weights, topk_ids
 
     def forward_impl(

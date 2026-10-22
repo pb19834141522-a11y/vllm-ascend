@@ -30,7 +30,13 @@ from vllm.utils.math_utils import cdiv
 
 from vllm_ascend.config_utils import config
 from vllm_ascend.device.device_config import is_950
-from vllm_ascend.device.hardware_profile import DeviceAdaptorFamily, HardwareCapability, get_current_hardware_profile
+from vllm_ascend.device.hardware_profile import (
+    DeviceAdaptorFamily,
+    HardwareCapability,
+    MoECommPolicy,
+    get_current_hardware_profile,
+)
+from vllm_ascend.spec_k_config import SpecKConfig
 
 if TYPE_CHECKING:
     from vllm.config import VllmConfig
@@ -625,6 +631,7 @@ class AscendConfig:
     eplb_config: EplbConfig = dataclasses.field(default_factory=EplbConfig)
     rejection_sampler_config: RejectionSamplerConfig = dataclasses.field(default_factory=RejectionSamplerConfig)
     rl_config: RlConfig = dataclasses.field(default_factory=RlConfig)
+    spec_k_config: SpecKConfig = dataclasses.field(default_factory=SpecKConfig)
 
     # ---- sub-configs declared later in this module ----
     # Lambdas defer class lookup until construction, after module initialization.
@@ -681,6 +688,7 @@ class AscendConfig:
     # the max_num_batched_tokens that sequence-parallel writeback corrected).
     def derive_and_validate(self, vllm_config: VllmConfig) -> AscendConfig:
         vc = vllm_config
+        self._validate_spec_k(vc)
         engram_config = getattr(vc, "engram_config", None)
         if (
             engram_config is not None
@@ -959,6 +967,42 @@ class AscendConfig:
         # sparse KV offload vs packed SFA main cache mutex
         self._validate_sparse_packed_kv_offload_compatibility()
         return self
+
+    def _validate_spec_k(self, vc: VllmConfig) -> None:
+        if not self.spec_k_config.enabled:
+            return
+        spec = vc.speculative_config
+        if spec is None or spec.method != "dspark":
+            raise ValueError("Spec-K currently requires DSpark speculative decoding")
+        if vc.use_v2_model_runner:
+            raise ValueError("Spec-K currently requires Model Runner V1")
+        parallel = vc.parallel_config
+        if (
+            parallel.pipeline_parallel_size != 1
+            or parallel.prefill_context_parallel_size != 1
+            or parallel.decode_context_parallel_size != 1
+        ):
+            raise ValueError("Spec-K currently supports TP/DP/EP without PP or context parallelism")
+        if not parallel.enable_expert_parallel or not 1 < parallel.world_size_across_dp <= 32:
+            raise ValueError("Spec-K fused routing requires EP with 2 through 32 ranks")
+        if (
+            self.enable_fused_mc2 != 1
+            or is_mega_moe_supported()
+            or get_current_hardware_profile().moe_comm_policy is not MoECommPolicy.FUSED_OR_CAPACITY
+        ):
+            raise ValueError("Spec-K currently requires the A3 dispatch_ffn_combine fused MC2 path")
+        if self.mix_placement or self.eplb_config.dynamic_eplb or self.enable_force_eplb or vc.lora_config is not None:
+            raise ValueError("Spec-K fused routing does not yet support EPLB, mixed shared placement, or LoRA")
+        if self.dynamic_spec_config.method is not None or spec.enable_adaptive_verification:
+            raise ValueError("Keep DSpark verification length fixed when enabling Spec-K")
+        if vc.kv_transfer_config is not None:
+            raise ValueError("Spec-K does not yet support KV-transfer recompute")
+        if vc.model_config.quantization != "ascend":
+            raise ValueError("Spec-K fused routing requires integer ModelSlim W4A8 target weights")
+        hf = vc.model_config.hf_text_config
+        top_k = getattr(hf, "num_experts_per_tok", getattr(hf, "top_k_experts", 0))
+        if len(self.spec_k_config.ppl_thresholds) >= top_k:
+            raise ValueError("Spec-K must have fewer thresholds than the target model top-k")
 
     @property
     def uses_packed_sfa_main_cache(self) -> bool:

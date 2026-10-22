@@ -205,6 +205,7 @@ from vllm_ascend.spec_decode.utils import (
     correct_optimistic_seq_lens_cpu,
     update_num_computed_tokens_for_batch_change,
 )
+from vllm_ascend.spec_k import SpecKBudgetState, SpecKPolicy
 from vllm_ascend.utils import (
     calc_split_factor,
     check_gdn_layer,
@@ -423,6 +424,19 @@ class NPUModelRunner(GPUModelRunner):
 
         # Ascend-specific configurations
         self.ascend_config = get_ascend_config()
+        self._spec_k_state = None
+        if self.ascend_config.spec_k_config.enabled:
+            hf = self.model_config.hf_text_config
+            top_k = getattr(hf, "num_experts_per_tok", getattr(hf, "top_k_experts", 0))
+            self._spec_k_state = SpecKBudgetState(
+                SpecKPolicy(self.ascend_config.spec_k_config, top_k, self.device),
+                self.max_num_reqs, self.model_config.max_model_len, self.max_num_tokens, self._make_buffer,
+                log_stats_interval=(
+                    self.ascend_config.spec_k_config.log_stats_interval
+                    if get_tensor_model_parallel_rank() == 0 else 0
+                ),
+                dp_rank=self.dp_rank,
+            )
         self.use_score_encoder_cache = is_score_encoder_cache_manager(self.vllm_config)
 
         self.kvpp = KVPPRuntime()
@@ -974,6 +988,9 @@ class NPUModelRunner(GPUModelRunner):
         ).unsqueeze(1)
 
     def _update_states(self, scheduler_output: "SchedulerOutput") -> Callable | None:
+        spec_k_state = getattr(self, "_spec_k_state", None)
+        if spec_k_state is not None:
+            spec_k_state.release(scheduler_output.finished_req_ids)
         self._update_replay_requests(scheduler_output)
         # Temporary rewind guard for KV-load-failure recompute.
         # This can be removed after the upstream fix is merged.
@@ -2206,6 +2223,12 @@ class NPUModelRunner(GPUModelRunner):
                 num_scheduled_tokens=num_scheduled_tokens,
                 num_rejected_tokens_gpu=num_rejected_tokens_gpu,
             )
+            spec_k_state = getattr(self, "_spec_k_state", None)
+            if spec_k_state is not None:
+                budgets = self.drafter.take_last_spec_k_budgets()
+                if budgets is None:
+                    raise RuntimeError("DSpark did not produce Spec-K budgets for the next target verification")
+                spec_k_state.set_drafts(self.input_batch.req_ids, budgets)
             if hasattr(self.drafter, "take_last_draft_probs"):
                 draft_probs = self.drafter.take_last_draft_probs()
                 if draft_probs is not None:
@@ -2641,6 +2664,15 @@ class NPUModelRunner(GPUModelRunner):
         defer_kv_connector_finalize = self.speculative_config is not None and (
             get_pp_group().is_last_rank or self.broadcast_pp_output
         )
+        spec_k_state = getattr(self, "_spec_k_state", None)
+        token_top_ks = None
+        if spec_k_state is not None:
+            token_top_ks = spec_k_state.prepare(
+                self.input_batch.req_ids, num_scheduled_tokens_np,
+                scheduler_output.scheduled_spec_decode_tokens,
+                [self.requests[req_id].num_prompt_tokens for req_id in self.input_batch.req_ids],
+                self.positions[:scheduler_output.total_num_scheduled_tokens], num_tokens_padded,
+            )
         active_device_metadata_executor = self._prepare_device_metadata_for_forward(cudagraph_mode)
         with (
             record_function_or_nullcontext("forward"),
@@ -2650,6 +2682,7 @@ class NPUModelRunner(GPUModelRunner):
                 num_tokens=num_tokens_padded,
                 num_tokens_across_dp=num_tokens_across_dp,
                 aclgraph_runtime_mode=cudagraph_mode,
+                token_top_ks=token_top_ks,
                 batch_descriptor=batch_desc,
                 num_actual_tokens=scheduler_output.total_num_scheduled_tokens,
                 model_instance=self.model,
@@ -2699,6 +2732,8 @@ class NPUModelRunner(GPUModelRunner):
         if active_device_metadata_executor is not None and active_device_metadata_executor.submission_in_flight:
             active_device_metadata_executor.release()
         self.kvpp.complete_forward()
+        if spec_k_state is not None and spec_k_state.stats is not None:
+            spec_k_state.stats.complete_step()
 
         with record_function_or_nullcontext("post process"):
             aux_hidden_states = None
@@ -4360,6 +4395,10 @@ class NPUModelRunner(GPUModelRunner):
                 num_tokens=num_tokens_padded,
                 num_tokens_across_dp=num_tokens_across_dp,
                 in_profile_run=is_profile,
+                token_top_ks=(
+                    self._spec_k_state.input_top_ks[:num_tokens_padded]
+                    if getattr(self, "_spec_k_state", None) is not None else None
+                ),
                 num_actual_tokens=num_tokens_padded,
                 aclgraph_runtime_mode=cudagraph_runtime_mode,
                 batch_descriptor=batch_desc,

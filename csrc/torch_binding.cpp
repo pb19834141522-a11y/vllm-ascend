@@ -3150,6 +3150,10 @@ TORCH_LIBRARY_EXPAND(CONCAT(_C, _ascend), ops)
         "                     int max_output_size, Tensor! out, Tensor! expert_token_nums, Tensor? x_active_mask=None, float swiglu_limit=1000000.0, int world_size=0) -> (Tensor out, Tensor expert_token_nums)"
     );
     ops.impl("dispatch_ffn_combine", torch::kPrivateUse1, &vllm_ascend::dispatch_ffn_combine);
+    // Rebuild the custom-op package together with this extension. Version 1
+    // pairs reserved-bucket routing with zero-weight read guards in W4A8
+    // unpermute; Python-only updates must not enable Spec-K on older binaries.
+    ops.def("spec_k_fused_route_abi_version() -> int", []() -> int64_t { return 1; });
 
     // vLLM-Ascend custom ops
     ops.def(

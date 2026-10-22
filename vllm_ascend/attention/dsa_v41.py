@@ -42,6 +42,7 @@ from vllm_ascend.ops.rope_dsv4 import (
     get_full_cos_and_sin_dsa_for_layer,
 )
 from vllm_ascend.ops.triton.c2_ring_metadata import build_c2_ring_metadata
+from vllm_ascend.ops.triton.packed_cache_slot_mapping import build_packed_cache_slot_mapping
 from vllm_ascend.utils import npu_stream_switch
 from vllm_ascend.worker.device_metadata import (
     DeviceMetadataStage,
@@ -1046,6 +1047,23 @@ class AscendDSAV41MetadataBuilder(AttentionMetadataBuilder[AscendDSAV41Metadata]
                         coordinates_output=self._slot_mapping_2d[:num_input_tokens],
                         flat_output=self._flat_slot_mapping[:num_input_tokens],
                     )
+                elif active_slots.device.type == "npu" and (not compressed or ratio in (1, 2)):
+                    # These coordinate/flat outputs also describe the A3 cache
+                    # layout. Reuse the device metadata kernel instead of
+                    # dispatching the per-group Div/Where/Copy chain on CPU.
+                    prepared_slots, prepared_flat_slots = build_packed_cache_slot_mapping(
+                        active_slots,
+                        positions if positions is not None else active_slots,
+                        common.query_start_loc,
+                        num_input_tokens,
+                        num_actual_reqs,
+                        num_actual_tokens,
+                        storage_block_size,
+                        ratio if compressed else 1,
+                        skip_update=kwargs.get("skip_ring_state_update", False),
+                        coordinates_output=self._slot_mapping_2d[:num_input_tokens],
+                        flat_output=self._flat_slot_mapping[:num_input_tokens],
+                    )
                 else:
                     if compressed and ratio != 1:
                         active_slots = compressed_slot_mapping(active_slots, ratio)
@@ -1389,7 +1407,9 @@ class AscendDSAV41MetadataBuilder(AttentionMetadataBuilder[AscendDSAV41Metadata]
             skip_ring_update = bool(kwargs.get("skip_ring_state_update", False))
 
             def build_c2_metadata() -> None:
-                if self._uses_a5_packed_cache and full_source_cos is not None and full_source_sin is not None:
+                if input_positions.device.type == "npu" and full_source_cos is not None and full_source_sin is not None:
+                    # Ring controls and source RoPE rows have the same tensor
+                    # contract on A3/A5; fuse their preparation on both.
                     build_c2_ring_metadata(
                         common.query_start_loc,
                         seq_lens,

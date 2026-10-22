@@ -1,0 +1,4 @@
+[W1022 01:23:56.211934840 NPUCachingAllocator.cpp:202] Warning: The current CANN and HDK(driver) versions require processing for 32 padding size, with memory allocation. (function operator())
+/home/p00948912/dsv41_dev_20261019/vllm-ascend/tests/e2e/nightly/single_node/ops/singlecard_ops/triton/test_spec_k_runtime_rows.py:16: UserWarning: Cannot create tensor with interal format while allow_internel_format=False, tensor will be created with base format. (Triggered internally at ../torch_npu/csrc/aten/common/TensorFactories.cpp:423.)
+  budgets = torch.arange(rows, dtype=torch.int32, device="npu") % 7
+Real NPU JIT specialization regression: passed

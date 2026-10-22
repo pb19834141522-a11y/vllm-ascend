@@ -1,0 +1,4675 @@
+{
+  "source_comparison": "/home/p00948912/vllm_profile/dsv41_runtime_metadata_fix_pair_20261022_0126/topk_retry_20261022_020349/comparison.json",
+  "runs": {
+    "baseline": {
+      "config": {
+        "source_model": "/home/models/DeepSeek-V4.1-Flash-1017-w4a8-Ascend",
+        "runtime_model": "/tmp/p00948912-dsv41-1017-runtime-20261021T081310Z",
+        "devices": [
+          6,
+          7,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15
+        ],
+        "port": 18829,
+        "container": "p00948912-dsv41-dev-20261019",
+        "tp": 8,
+        "dp": 1,
+        "ep": 8,
+        "num_draft": 7,
+        "max_num_seqs": 32,
+        "e2e_requests": 384,
+        "e2e_concurrency": 32,
+        "output_tokens": 1024,
+        "ignore_eos": true,
+        "seed": 42,
+        "profile_delay_steps": 100,
+        "profile_steps": 30,
+        "source_untouched": true,
+        "baseline_reference": "/home/p00948912/vllm_profile/dsv41_runtime_metadata_fix_pair_20261022_0126/baseline",
+        "spec_k_config": {
+          "enabled": false
+        },
+        "mode": "baseline",
+        "fix_validation": "/home/p00948912/dsv41_dev_20261019/runtime/spec_k_runtime_metadata_fix_20261022_011829"
+      },
+      "metrics": {
+        "date": "20261022-013533",
+        "endpoint_type": "vllm",
+        "backend": "vllm",
+        "label": null,
+        "model_id": "/tmp/p00948912-dsv41-1017-runtime-20261021T081310Z",
+        "tokenizer_id": "/tmp/p00948912-dsv41-1017-runtime-20261021T081310Z",
+        "num_prompts": 384,
+        "request_rate": "inf",
+        "burstiness": 1.0,
+        "max_concurrency": 32,
+        "duration": 342.3866503899917,
+        "completed": 384,
+        "failed": 0,
+        "total_input_tokens": 86261,
+        "total_output_tokens": 393216,
+        "request_throughput": 1.1215390540566026,
+        "request_goodput": null,
+        "output_throughput": 1148.455991353961,
+        "total_token_throughput": 1400.3963047445252,
+        "max_output_tokens_per_s": 416.0,
+        "max_concurrent_requests": 36,
+        "rtfx": 0.0,
+        "spec_decode_acceptance_rate": 43.1180598272409,
+        "spec_decode_acceptance_length": 4.018264187906863,
+        "spec_decode_num_drafts": 98006,
+        "spec_decode_draft_tokens": 686042,
+        "spec_decode_accepted_tokens": 295808,
+        "mean_ttft_ms": 521.8666225780074,
+        "median_ttft_ms": 464.1135249985382,
+        "std_ttft_ms": 173.9541604294926,
+        "p99_ttft_ms": 1209.233636801655,
+        "mean_tpot_ms": 25.812453053544225,
+        "median_tpot_ms": 24.111143435965605,
+        "std_tpot_ms": 9.343287654778045,
+        "p99_tpot_ms": 51.62021590488442,
+        "mean_itl_ms": 103.46262022661759,
+        "median_itl_ms": 82.9917849987396,
+        "std_itl_ms": 59.64641395743375,
+        "p99_itl_ms": 339.63220049990923,
+        "token_timeline_method": "client SSE arrival perf_counter timestamps, exact len(choice.token_ids) per chunk; no retokenization"
+      },
+      "latencies": {
+        "request_seconds": {
+          "mean": 26.928006096353744,
+          "median": 25.11267651498929,
+          "p90": 39.688680891002875,
+          "p95": 44.04376495099204,
+          "p99": 53.33275624560355,
+          "min": 12.824931600000127,
+          "max": 72.7330092300108,
+          "std": 9.560580238038476,
+          "n": 384
+        },
+        "ttft_ms": {
+          "mean": 521.8666225780074,
+          "median": 464.1135249985382,
+          "p90": 699.3957329992554,
+          "p95": 835.5608499950904,
+          "p99": 1209.233636801655,
+          "min": 327.35783999669366,
+          "max": 1404.6582199953264,
+          "std": 173.9541604294926,
+          "n": 384
+        },
+        "tpot_ms": {
+          "mean": 25.81245305354422,
+          "median": 24.1111434359656,
+          "p90": 38.26584740860111,
+          "p95": 42.54283579569808,
+          "p99": 51.620215904884425,
+          "min": 11.35533042033856,
+          "max": 70.7546429227832,
+          "std": 9.343287654778045,
+          "n": 384
+        },
+        "return_chunk_itl_ms": {
+          "mean": 103.46262022661759,
+          "median": 82.9917849987396,
+          "p90": 192.9636249988107,
+          "p95": 264.3410750060866,
+          "p99": 339.63220049990923,
+          "min": 55.821009998908266,
+          "max": 979.9352600093698,
+          "std": 59.64641395743376,
+          "n": 98006
+        }
+      },
+      "accepted_per_position": [
+        0.7694528906393486,
+        0.6212476787135481,
+        0.5035916168397854,
+        0.4021998653143685,
+        0.3287451788666,
+        0.24396465522519029,
+        0.14906230230802195
+      ],
+      "visible_round_accounting": {
+        "decode_exposure_request_seconds": 10139.957557929883,
+        "post_first_tokens": 392832,
+        "post_first_return_chunks": 98006,
+        "tokens_per_return_chunk": 4.008244393200417,
+        "mean_return_interval_ms": 103.46262022661759
+      },
+      "profiling": {
+        "means": {
+          "target_ms": 54.17439978448276,
+          "outside_ms": 43.216456896551726,
+          "cycle_ms": 97.39085668103448,
+          "before_first_draft_fused": 4.0996939655172415,
+          "draft_fused_span": 2.1186810344827585,
+          "after_draft_to_last_argmax": 1.737614224137931,
+          "after_argmax_to_target": 35.260467672413796
+        },
+        "same29_cycle_distribution": {
+          "target_ms": {
+            "mean": 54.17439978448276,
+            "median": 54.12375,
+            "p90": 54.603975,
+            "p95": 54.6820875,
+            "p99": 54.8519675,
+            "min": 53.46675,
+            "max": 55.2175,
+            "std": 0.3272406752148022,
+            "n": 232
+          },
+          "outside_ms": {
+            "mean": 43.216456896551726,
+            "median": 42.908875,
+            "p90": 44.9906,
+            "p95": 45.463275,
+            "p99": 45.560829999999996,
+            "min": 41.38925,
+            "max": 45.7005,
+            "std": 1.3465714434210019,
+            "n": 232
+          },
+          "cycle_ms": {
+            "mean": 97.39085668103448,
+            "median": 97.333875,
+            "p90": 99.241175,
+            "p95": 99.3768625,
+            "p99": 99.79868,
+            "min": 95.4075,
+            "max": 99.95275,
+            "std": 1.350835473112372,
+            "n": 232
+          }
+        },
+        "target_kernel_sum_ms": 48.35294463793087,
+        "other_target_kernel_sum_ms": 23.67786485344822,
+        "outside_default_kernel_sum_ms": 10.16814230603448,
+        "target_fused_kernel_share_percent": 45.547490849267085,
+        "cycle_fused_kernel_share_percent": 25.33613588110862,
+        "target_wall_share_percent": 55.625755466870714,
+        "outside_wall_share_percent": 44.37424453312929,
+        "client_phases": {
+          "before_10_intervals": {
+            "interval_count": 10,
+            "mean_ms": 82.74225046916399,
+            "intervals_ms": [
+              82.50295593461487,
+              82.85953124868684,
+              84.62161343777552,
+              83.12958656460978,
+              82.76889531407505,
+              82.67140218231361,
+              82.5859562610276,
+              80.58361311850604,
+              83.20952030771878,
+              82.48943032231182
+            ]
+          },
+          "recorded": {
+            "interval_count": 29,
+            "mean_ms": 97.38651276937414,
+            "intervals_ms": [
+              98.28799312526826,
+              98.8130649930099,
+              95.94451531302184,
+              95.60346251237206,
+              95.65279436355922,
+              98.59183937078342,
+              97.28130562871229,
+              99.75153593404684,
+              98.39530094177462,
+              98.60763844335452,
+              95.57759562449064,
+              98.37452562351245,
+              96.04037000099197,
+              95.64271719136741,
+              97.41256218694616,
+              99.2589771776693,
+              95.43762968678493,
+              98.72061281930655,
+              97.93084624106996,
+              98.70461125683505,
+              97.10351687681396,
+              96.8588565592654,
+              97.3582262522541,
+              99.9043750052806,
+              96.17798498948105,
+              95.96765218884684,
+              95.64400563249364,
+              96.49713468388654,
+              98.66721968865022
+            ]
+          },
+          "after_10_intervals": {
+            "interval_count": 10,
+            "mean_ms": 84.98412128683412,
+            "intervals_ms": [
+              84.62827124458272,
+              85.15997062204406,
+              84.00894125225022,
+              85.50219061726239,
+              83.57473977957852,
+              86.78138937102631,
+              83.97864481958095,
+              84.62410386709962,
+              87.07832904474344,
+              84.50463225017302
+            ]
+          },
+          "after_full_32_only": {
+            "interval_count": 4,
+            "mean_ms": 84.82484343403485,
+            "intervals_ms": [
+              84.62827124458272,
+              85.15997062204406,
+              84.00894125225022,
+              85.50219061726239
+            ]
+          }
+        },
+        "rank_validation": [
+          {
+            "rank": 0,
+            "fused_calls": 1200,
+            "eager_fused_calls": 90,
+            "model_ids": [
+              "49"
+            ],
+            "streams": [
+              "89"
+            ],
+            "router_shapes": {
+              "32,384": 1200
+            }
+          },
+          {
+            "rank": 1,
+            "fused_calls": 1200,
+            "eager_fused_calls": 90,
+            "model_ids": [
+              "49"
+            ],
+            "streams": [
+              "89"
+            ],
+            "router_shapes": {
+              "32,384": 1200
+            }
+          },
+          {
+            "rank": 2,
+            "fused_calls": 1200,
+            "eager_fused_calls": 90,
+            "model_ids": [
+              "49"
+            ],
+            "streams": [
+              "89"
+            ],
+            "router_shapes": {
+              "32,384": 1200
+            }
+          },
+          {
+            "rank": 3,
+            "fused_calls": 1200,
+            "eager_fused_calls": 90,
+            "model_ids": [
+              "49"
+            ],
+            "streams": [
+              "89"
+            ],
+            "router_shapes": {
+              "32,384": 1200
+            }
+          },
+          {
+            "rank": 4,
+            "fused_calls": 1200,
+            "eager_fused_calls": 90,
+            "model_ids": [
+              "49"
+            ],
+            "streams": [
+              "89"
+            ],
+            "router_shapes": {
+              "32,384": 1200
+            }
+          },
+          {
+            "rank": 5,
+            "fused_calls": 1200,
+            "eager_fused_calls": 90,
+            "model_ids": [
+              "49"
+            ],
+            "streams": [
+              "89"
+            ],
+            "router_shapes": {
+              "32,384": 1200
+            }
+          },
+          {
+            "rank": 6,
+            "fused_calls": 1200,
+            "eager_fused_calls": 90,
+            "model_ids": [
+              "49"
+            ],
+            "streams": [
+              "89"
+            ],
+            "router_shapes": {
+              "32,384": 1200
+            }
+          },
+          {
+            "rank": 7,
+            "fused_calls": 1200,
+            "eager_fused_calls": 90,
+            "model_ids": [
+              "49"
+            ],
+            "streams": [
+              "89"
+            ],
+            "router_shapes": {
+              "32,384": 1200
+            }
+          }
+        ],
+        "hardware_tasks": {
+          "ranks": [
+            {
+              "rank": 0,
+              "physical_device": 6,
+              "target_stream": "89",
+              "means": {
+                "target_ms": 54.14299137931034,
+                "outside_ms": 43.22378448275862,
+                "cycle_ms": 97.36677586206896
+              },
+              "target_task_union_ms": 53.42029310344827,
+              "outside_default_task_union_ms": 14.335129310344827,
+              "types": {
+                "target": {
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 935.9999999999993,
+                    "ms_per_cycle": 7.994267241379315
+                  },
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 0.005103448275862071
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 5.0114741379310335
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 10.999999999999995,
+                    "ms_per_cycle": 0.008853448275862067
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 295.9999999999999,
+                    "ms_per_cycle": 34.724905172413806
+                  },
+                  "MEM_WAIT_VALUE": {
+                    "calls_per_cycle": 18.000000000000007,
+                    "ms_per_cycle": 0.008870689655172412
+                  },
+                  "MEM_WRITE_VALUE": {
+                    "calls_per_cycle": 6.0,
+                    "ms_per_cycle": 0.0007844827586206895
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 175.0,
+                    "ms_per_cycle": 5.465956896551726
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 10.000000000000005,
+                    "ms_per_cycle": 0.14005172413793104
+                  },
+                  "EVENT_RESET": {
+                    "calls_per_cycle": 649.4827586206893,
+                    "ms_per_cycle": 0.06000000000000005
+                  },
+                  "NOTIFY_RECORD": {
+                    "calls_per_cycle": 0.10344827586206896,
+                    "ms_per_cycle": 2.586206896551724e-05
+                  }
+                },
+                "outside_default": {
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 96.99999999999993,
+                    "ms_per_cycle": 0.0013103448275862066
+                  },
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 587.0000000000002,
+                    "ms_per_cycle": 7.074327586206903
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 18.999999999999996,
+                    "ms_per_cycle": 1.2550086206896554
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 3.9126810344827594
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 107.99999999999994,
+                    "ms_per_cycle": 0.26168965517241394
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 9.000000000000004,
+                    "ms_per_cycle": 0.09574137931034482
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 1.7311810344827587
+                  },
+                  "MODEL_EXECUTE": {
+                    "calls_per_cycle": 0.9999999999999996,
+                    "ms_per_cycle": 0.003189655172413794
+                  }
+                }
+              }
+            },
+            {
+              "rank": 1,
+              "physical_device": 7,
+              "target_stream": "89",
+              "means": {
+                "target_ms": 54.19818965517241,
+                "outside_ms": 43.1949051724138,
+                "cycle_ms": 97.39309482758621
+              },
+              "target_task_union_ms": 53.47716379310344,
+              "outside_default_task_union_ms": 14.975387931034483,
+              "types": {
+                "target": {
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 935.9999999999993,
+                    "ms_per_cycle": 8.362353448275853
+                  },
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 0.005741379310344831
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 5.321327586206894
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 10.999999999999995,
+                    "ms_per_cycle": 0.00882758620689655
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 295.9999999999999,
+                    "ms_per_cycle": 34.11546551724139
+                  },
+                  "MEM_WAIT_VALUE": {
+                    "calls_per_cycle": 18.000000000000007,
+                    "ms_per_cycle": 0.008836206896551723
+                  },
+                  "MEM_WRITE_VALUE": {
+                    "calls_per_cycle": 6.0,
+                    "ms_per_cycle": 0.0008534482758620688
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 175.0,
+                    "ms_per_cycle": 5.452939655172415
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 10.000000000000005,
+                    "ms_per_cycle": 0.13992241379310344
+                  },
+                  "EVENT_RESET": {
+                    "calls_per_cycle": 649.3793103448273,
+                    "ms_per_cycle": 0.06089655172413799
+                  }
+                },
+                "outside_default": {
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 96.99999999999993,
+                    "ms_per_cycle": 0.0013534482758620688
+                  },
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 587.0000000000002,
+                    "ms_per_cycle": 7.07712068965518
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 18.999999999999996,
+                    "ms_per_cycle": 1.2520258620689657
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 4.565629310344827
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 107.99999999999994,
+                    "ms_per_cycle": 0.2613706896551725
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 9.000000000000004,
+                    "ms_per_cycle": 0.10027586206896552
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 1.7143793103448275
+                  },
+                  "MODEL_EXECUTE": {
+                    "calls_per_cycle": 0.9999999999999996,
+                    "ms_per_cycle": 0.003232758620689655
+                  }
+                }
+              }
+            },
+            {
+              "rank": 2,
+              "physical_device": 10,
+              "target_stream": "89",
+              "means": {
+                "target_ms": 54.1949827586207,
+                "outside_ms": 43.188422413793106,
+                "cycle_ms": 97.3834051724138
+              },
+              "target_task_union_ms": 53.470491379310346,
+              "outside_default_task_union_ms": 15.698767241379311,
+              "types": {
+                "target": {
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 935.9999999999993,
+                    "ms_per_cycle": 8.2182672413793
+                  },
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 0.005198275862068969
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 4.885370689655172
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 10.999999999999995,
+                    "ms_per_cycle": 0.00871551724137931
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 295.9999999999999,
+                    "ms_per_cycle": 34.67396551724138
+                  },
+                  "MEM_WAIT_VALUE": {
+                    "calls_per_cycle": 18.000000000000007,
+                    "ms_per_cycle": 0.008913793103448274
+                  },
+                  "MEM_WRITE_VALUE": {
+                    "calls_per_cycle": 6.0,
+                    "ms_per_cycle": 0.0006896551724137929
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 175.0,
+                    "ms_per_cycle": 5.4633017241379305
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 10.000000000000005,
+                    "ms_per_cycle": 0.14585344827586205
+                  },
+                  "EVENT_RESET": {
+                    "calls_per_cycle": 649.5862068965514,
+                    "ms_per_cycle": 0.06021551724137937
+                  }
+                },
+                "outside_default": {
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 96.99999999999993,
+                    "ms_per_cycle": 0.0011034482758620688
+                  },
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 587.0000000000002,
+                    "ms_per_cycle": 7.092456896551733
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 18.999999999999996,
+                    "ms_per_cycle": 1.254646551724138
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 5.268293103448276
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 107.99999999999994,
+                    "ms_per_cycle": 0.26212068965517255
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 9.000000000000004,
+                    "ms_per_cycle": 0.09633620689655174
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 1.7205086206896556
+                  },
+                  "MODEL_EXECUTE": {
+                    "calls_per_cycle": 0.9999999999999996,
+                    "ms_per_cycle": 0.0033017241379310353
+                  }
+                }
+              }
+            },
+            {
+              "rank": 3,
+              "physical_device": 11,
+              "target_stream": "89",
+              "means": {
+                "target_ms": 54.132612068965514,
+                "outside_ms": 43.26204310344828,
+                "cycle_ms": 97.39465517241379
+              },
+              "target_task_union_ms": 53.411439655172416,
+              "outside_default_task_union_ms": 14.108637931034483,
+              "types": {
+                "target": {
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 935.9999999999993,
+                    "ms_per_cycle": 8.216103448275856
+                  },
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 0.004982758620689658
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 4.9675172413793085
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 10.999999999999995,
+                    "ms_per_cycle": 0.008879310344827585
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 295.9999999999999,
+                    "ms_per_cycle": 34.54550000000002
+                  },
+                  "MEM_WAIT_VALUE": {
+                    "calls_per_cycle": 18.000000000000007,
+                    "ms_per_cycle": 0.008663793103448275
+                  },
+                  "MEM_WRITE_VALUE": {
+                    "calls_per_cycle": 6.0,
+                    "ms_per_cycle": 0.000775862068965517
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 175.0,
+                    "ms_per_cycle": 5.458767241379311
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 10.000000000000005,
+                    "ms_per_cycle": 0.1399137931034483
+                  },
+                  "EVENT_RESET": {
+                    "calls_per_cycle": 649.4827586206894,
+                    "ms_per_cycle": 0.06033620689655178
+                  }
+                },
+                "outside_default": {
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 96.99999999999993,
+                    "ms_per_cycle": 0.0013275862068965513
+                  },
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 587.0000000000002,
+                    "ms_per_cycle": 7.089732758620697
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 18.999999999999996,
+                    "ms_per_cycle": 1.2610000000000001
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 3.659905172413793
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 107.99999999999994,
+                    "ms_per_cycle": 0.26269827586206906
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 9.000000000000004,
+                    "ms_per_cycle": 0.10156896551724137
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 1.7290862068965518
+                  },
+                  "MODEL_EXECUTE": {
+                    "calls_per_cycle": 0.9999999999999996,
+                    "ms_per_cycle": 0.0033189655172413805
+                  }
+                }
+              }
+            },
+            {
+              "rank": 4,
+              "physical_device": 12,
+              "target_stream": "89",
+              "means": {
+                "target_ms": 54.20396551724138,
+                "outside_ms": 43.19420689655173,
+                "cycle_ms": 97.3981724137931
+              },
+              "target_task_union_ms": 53.480784482758615,
+              "outside_default_task_union_ms": 15.37448275862069,
+              "types": {
+                "target": {
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 935.9999999999993,
+                    "ms_per_cycle": 8.320293103448266
+                  },
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 0.005327586206896554
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 4.80969827586207
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 10.999999999999995,
+                    "ms_per_cycle": 0.008931034482758619
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 295.9999999999999,
+                    "ms_per_cycle": 34.62293103448278
+                  },
+                  "MEM_WAIT_VALUE": {
+                    "calls_per_cycle": 18.000000000000007,
+                    "ms_per_cycle": 0.008732758620689653
+                  },
+                  "MEM_WRITE_VALUE": {
+                    "calls_per_cycle": 6.0,
+                    "ms_per_cycle": 0.0008017241379310342
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 175.0,
+                    "ms_per_cycle": 5.500741379310346
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 10.000000000000005,
+                    "ms_per_cycle": 0.1428448275862069
+                  },
+                  "EVENT_RESET": {
+                    "calls_per_cycle": 649.413793103448,
+                    "ms_per_cycle": 0.06047413793103454
+                  },
+                  "NOTIFY_RECORD": {
+                    "calls_per_cycle": 0.034482758620689655,
+                    "ms_per_cycle": 8.620689655172414e-06
+                  }
+                },
+                "outside_default": {
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 96.99999999999993,
+                    "ms_per_cycle": 0.0013103448275862066
+                  },
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 587.0000000000002,
+                    "ms_per_cycle": 7.117163793103458
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 18.999999999999996,
+                    "ms_per_cycle": 1.254310344827586
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 4.91106896551724
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 107.99999999999994,
+                    "ms_per_cycle": 0.26306034482758633
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 9.000000000000004,
+                    "ms_per_cycle": 0.09930172413793104
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 1.7250689655172415
+                  },
+                  "MODEL_EXECUTE": {
+                    "calls_per_cycle": 0.9999999999999996,
+                    "ms_per_cycle": 0.0031982758620689657
+                  }
+                }
+              }
+            },
+            {
+              "rank": 5,
+              "physical_device": 13,
+              "target_stream": "89",
+              "means": {
+                "target_ms": 54.21514655172414,
+                "outside_ms": 43.20401724137931,
+                "cycle_ms": 97.41916379310345
+              },
+              "target_task_union_ms": 53.49265517241379,
+              "outside_default_task_union_ms": 16.681689655172413,
+              "types": {
+                "target": {
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 935.9999999999993,
+                    "ms_per_cycle": 8.186456896551716
+                  },
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 0.005534482758620693
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 5.051965517241379
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 10.999999999999995,
+                    "ms_per_cycle": 0.008793103448275861
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 295.9999999999999,
+                    "ms_per_cycle": 34.539732758620715
+                  },
+                  "MEM_WAIT_VALUE": {
+                    "calls_per_cycle": 18.000000000000007,
+                    "ms_per_cycle": 0.008698275862068965
+                  },
+                  "MEM_WRITE_VALUE": {
+                    "calls_per_cycle": 6.0,
+                    "ms_per_cycle": 0.0008275862068965516
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 175.0,
+                    "ms_per_cycle": 5.491456896551724
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 10.000000000000005,
+                    "ms_per_cycle": 0.1386724137931034
+                  },
+                  "EVENT_RESET": {
+                    "calls_per_cycle": 649.5172413793101,
+                    "ms_per_cycle": 0.0605172413793104
+                  }
+                },
+                "outside_default": {
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 96.99999999999993,
+                    "ms_per_cycle": 0.00125
+                  },
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 587.0000000000002,
+                    "ms_per_cycle": 7.077887931034491
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 18.999999999999996,
+                    "ms_per_cycle": 1.2526034482758621
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 6.254146551724139
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 107.99999999999994,
+                    "ms_per_cycle": 0.26403448275862074
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 9.000000000000004,
+                    "ms_per_cycle": 0.10207758620689654
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 1.726577586206897
+                  },
+                  "MODEL_EXECUTE": {
+                    "calls_per_cycle": 0.9999999999999996,
+                    "ms_per_cycle": 0.0031120689655172416
+                  }
+                }
+              }
+            },
+            {
+              "rank": 6,
+              "physical_device": 14,
+              "target_stream": "89",
+              "means": {
+                "target_ms": 54.10541379310345,
+                "outside_ms": 43.26134482758621,
+                "cycle_ms": 97.36675862068965
+              },
+              "target_task_union_ms": 53.38239655172414,
+              "outside_default_task_union_ms": 13.231465517241379,
+              "types": {
+                "target": {
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 935.9999999999993,
+                    "ms_per_cycle": 8.320525862068946
+                  },
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 0.005301724137931037
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 5.006043103448275
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 10.999999999999995,
+                    "ms_per_cycle": 0.008818965517241378
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 295.9999999999999,
+                    "ms_per_cycle": 34.355741379310366
+                  },
+                  "MEM_WAIT_VALUE": {
+                    "calls_per_cycle": 18.000000000000007,
+                    "ms_per_cycle": 0.008698275862068963
+                  },
+                  "MEM_WRITE_VALUE": {
+                    "calls_per_cycle": 6.0,
+                    "ms_per_cycle": 0.0007068965517241377
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 175.0,
+                    "ms_per_cycle": 5.4749137931034495
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 10.000000000000005,
+                    "ms_per_cycle": 0.14135344827586208
+                  },
+                  "EVENT_RESET": {
+                    "calls_per_cycle": 649.5517241379308,
+                    "ms_per_cycle": 0.06027586206896558
+                  },
+                  "NOTIFY_RECORD": {
+                    "calls_per_cycle": 0.06896551724137931,
+                    "ms_per_cycle": 1.7241379310344828e-05
+                  }
+                },
+                "outside_default": {
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 96.99999999999993,
+                    "ms_per_cycle": 0.0014913793103448277
+                  },
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 587.0000000000002,
+                    "ms_per_cycle": 7.1124568965517305
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 18.999999999999996,
+                    "ms_per_cycle": 1.2460344827586205
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 2.7753965517241377
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 107.99999999999994,
+                    "ms_per_cycle": 0.26156896551724146
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 9.000000000000004,
+                    "ms_per_cycle": 0.10106896551724136
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 1.730275862068966
+                  },
+                  "MODEL_EXECUTE": {
+                    "calls_per_cycle": 0.9999999999999996,
+                    "ms_per_cycle": 0.0031724137931034486
+                  }
+                }
+              }
+            },
+            {
+              "rank": 7,
+              "physical_device": 15,
+              "target_stream": "89",
+              "means": {
+                "target_ms": 54.20189655172414,
+                "outside_ms": 43.20293103448276,
+                "cycle_ms": 97.40482758620689
+              },
+              "target_task_union_ms": 53.48030172413793,
+              "outside_default_task_union_ms": 14.505103448275863,
+              "types": {
+                "target": {
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 935.9999999999993,
+                    "ms_per_cycle": 8.067120689655166
+                  },
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 0.005318965517241381
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 5.064353448275862
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 10.999999999999995,
+                    "ms_per_cycle": 0.008879310344827585
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 295.9999999999999,
+                    "ms_per_cycle": 34.667198275862084
+                  },
+                  "MEM_WAIT_VALUE": {
+                    "calls_per_cycle": 18.000000000000007,
+                    "ms_per_cycle": 0.008629310344827584
+                  },
+                  "MEM_WRITE_VALUE": {
+                    "calls_per_cycle": 6.0,
+                    "ms_per_cycle": 0.0007672413793103447
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 175.0,
+                    "ms_per_cycle": 5.452836206896552
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 10.000000000000005,
+                    "ms_per_cycle": 0.14443965517241378
+                  },
+                  "EVENT_RESET": {
+                    "calls_per_cycle": 649.6206896551721,
+                    "ms_per_cycle": 0.060732758620689706
+                  },
+                  "NOTIFY_RECORD": {
+                    "calls_per_cycle": 0.10344827586206896,
+                    "ms_per_cycle": 2.586206896551724e-05
+                  }
+                },
+                "outside_default": {
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 96.99999999999993,
+                    "ms_per_cycle": 0.0011637931034482755
+                  },
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 587.0000000000002,
+                    "ms_per_cycle": 7.081741379310351
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 18.999999999999996,
+                    "ms_per_cycle": 1.2486896551724138
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 4.080896551724138
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 107.99999999999994,
+                    "ms_per_cycle": 0.2640689655172415
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 9.000000000000004,
+                    "ms_per_cycle": 0.09995689655172416
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 1.7254137931034486
+                  },
+                  "MODEL_EXECUTE": {
+                    "calls_per_cycle": 0.9999999999999996,
+                    "ms_per_cycle": 0.003172413793103448
+                  }
+                }
+              }
+            }
+          ],
+          "eight_rank_mean": {
+            "target": {
+              "AI_VECTOR_CORE": {
+                "calls_per_cycle": 935.9999999999992,
+                "ms_per_cycle": 8.210673491379303
+              },
+              "EVENT_RECORD": {
+                "calls_per_cycle": 262.00000000000017,
+                "ms_per_cycle": 0.005313577586206899
+              },
+              "EVENT_WAIT": {
+                "calls_per_cycle": 262.00000000000017,
+                "ms_per_cycle": 5.014718749999999
+              },
+              "MEMCPY_ASYNC": {
+                "calls_per_cycle": 10.999999999999996,
+                "ms_per_cycle": 0.008837284482758619
+              },
+              "MIX_AIC": {
+                "calls_per_cycle": 295.99999999999994,
+                "ms_per_cycle": 34.53067995689656
+              },
+              "MEM_WAIT_VALUE": {
+                "calls_per_cycle": 18.000000000000004,
+                "ms_per_cycle": 0.008755387931034482
+              },
+              "MEM_WRITE_VALUE": {
+                "calls_per_cycle": 6.0,
+                "ms_per_cycle": 0.0007758620689655171
+              },
+              "AI_CORE": {
+                "calls_per_cycle": 175.0,
+                "ms_per_cycle": 5.470114224137931
+              },
+              "MIX_AIV": {
+                "calls_per_cycle": 10.000000000000005,
+                "ms_per_cycle": 0.14163146551724137
+              },
+              "EVENT_RESET": {
+                "calls_per_cycle": 649.5043103448273,
+                "ms_per_cycle": 0.060431034482758675
+              },
+              "NOTIFY_RECORD": {
+                "calls_per_cycle": 0.03879310344827586,
+                "ms_per_cycle": 9.698275862068964e-06
+              }
+            },
+            "outside_default": {
+              "EVENT_RECORD": {
+                "calls_per_cycle": 96.99999999999991,
+                "ms_per_cycle": 0.0012887931034482757
+              },
+              "AI_VECTOR_CORE": {
+                "calls_per_cycle": 587.0000000000001,
+                "ms_per_cycle": 7.090360991379318
+              },
+              "AI_CORE": {
+                "calls_per_cycle": 18.999999999999996,
+                "ms_per_cycle": 1.2530398706896553
+              },
+              "EVENT_WAIT": {
+                "calls_per_cycle": 26.999999999999993,
+                "ms_per_cycle": 4.4285021551724135
+              },
+              "MEMCPY_ASYNC": {
+                "calls_per_cycle": 107.99999999999997,
+                "ms_per_cycle": 0.26257650862068976
+              },
+              "MIX_AIV": {
+                "calls_per_cycle": 9.000000000000002,
+                "ms_per_cycle": 0.09954094827586206
+              },
+              "MIX_AIC": {
+                "calls_per_cycle": 26.999999999999993,
+                "ms_per_cycle": 1.7253114224137935
+              },
+              "MODEL_EXECUTE": {
+                "calls_per_cycle": 0.9999999999999998,
+                "ms_per_cycle": 0.0032122844827586214
+              }
+            }
+          },
+          "note": "Target tasks from target stream; outside tasks from default stream47 only. Durations are clipped to same29-cycle windows. Other streams can overlap these tasks; EVENT_WAIT is not automatically pure communication."
+        }
+      },
+      "rank0_cpu_outside": {
+        "count_per_round": 4978.172413793103,
+        "operators": {
+          "aten::detach": {
+            "count_per_round": 3.0,
+            "cpu_duration_ms_per_round": 0.008229655172413792
+          },
+          "aten::to": {
+            "count_per_round": 340.0,
+            "cpu_duration_ms_per_round": 2.4554813793103496
+          },
+          "aten::resolve_conj": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.0030989655172413795
+          },
+          "aten::resolve_neg": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.002810689655172415
+          },
+          "aten::is_pinned": {
+            "count_per_round": 61.0,
+            "cpu_duration_ms_per_round": 0.46577689655172366
+          },
+          "aten::pin_memory": {
+            "count_per_round": 61.0,
+            "cpu_duration_ms_per_round": 1.7273672413793113
+          },
+          "acl_memcpy_host_to_device": {
+            "count_per_round": 61.0,
+            "cpu_duration_ms_per_round": 0.40339620689655176
+          },
+          "aten::copy_": {
+            "count_per_round": 273.0,
+            "cpu_duration_ms_per_round": 1.8485582758620682
+          },
+          "aten::as_strided": {
+            "count_per_round": 873.0,
+            "cpu_duration_ms_per_round": 2.413241724137932
+          },
+          "aten::slice": {
+            "count_per_round": 849.0,
+            "cpu_duration_ms_per_round": 5.445000344827571
+          },
+          "compute_slot_mapping_fused_groups_adaptive_kernel": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.011664827586206898
+          },
+          "aten::lift_fresh": {
+            "count_per_round": 33.0,
+            "cpu_duration_ms_per_round": 0.02599
+          },
+          "aten::set_": {
+            "count_per_round": 57.0,
+            "cpu_duration_ms_per_round": 0.18304103448275838
+          },
+          "aten::_pin_memory": {
+            "count_per_round": 57.0,
+            "cpu_duration_ms_per_round": 1.0871431034482768
+          },
+          "empty_tensor": {
+            "count_per_round": 223.0,
+            "cpu_duration_ms_per_round": 0.7380417241379311
+          },
+          "aten::empty_strided": {
+            "count_per_round": 168.0,
+            "cpu_duration_ms_per_round": 0.7343934482758621
+          },
+          "aten::_to_copy": {
+            "count_per_round": 142.0,
+            "cpu_duration_ms_per_round": 1.8449962068965535
+          },
+          "Event::query": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.04112344827586208
+          },
+          "destroy_event": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.009880344827586202
+          },
+          "record_event": {
+            "count_per_round": 75.0,
+            "cpu_duration_ms_per_round": 0.32371344827586124
+          },
+          "Event::record": {
+            "count_per_round": 3.1724137931034484,
+            "cpu_duration_ms_per_round": 0.17462482758620693
+          },
+          "aclnnIndex": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.00850931034482759
+          },
+          "aten::index": {
+            "count_per_round": 6.0,
+            "cpu_duration_ms_per_round": 0.184313448275862
+          },
+          "aten::_local_scalar_dense": {
+            "count_per_round": 65.0,
+            "cpu_duration_ms_per_round": 0.08861206896551721
+          },
+          "aten::item": {
+            "count_per_round": 65.0,
+            "cpu_duration_ms_per_round": 0.17764862068965517
+          },
+          "aclnnAdds": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.00553103448275862
+          },
+          "aten::add": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.02238724137931034
+          },
+          "Event::synchronize": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.04207344827586207
+          },
+          "aclnnInplaceFillScalar": {
+            "count_per_round": 54.0,
+            "cpu_duration_ms_per_round": 0.28821724137931015
+          },
+          "aten::fill_": {
+            "count_per_round": 113.0,
+            "cpu_duration_ms_per_round": 0.7011724137931035
+          },
+          "aten::lt": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.022643793103448284
+          },
+          "aclnnInplaceCopy": {
+            "count_per_round": 16.0,
+            "cpu_duration_ms_per_round": 0.07969724137931024
+          },
+          "aten::empty": {
+            "count_per_round": 199.0,
+            "cpu_duration_ms_per_round": 0.6913506896551705
+          },
+          "aten::max": {
+            "count_per_round": 54.0,
+            "cpu_duration_ms_per_round": 0.3648562068965518
+          },
+          "aten::sub": {
+            "count_per_round": 159.0,
+            "cpu_duration_ms_per_round": 1.1515824137931034
+          },
+          "aten::sum": {
+            "count_per_round": 12.0,
+            "cpu_duration_ms_per_round": 0.2767334482758618
+          },
+          "aten::as_strided_": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.013077241379310349
+          },
+          "aten::nonzero": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.04915965517241381
+          },
+          "aten::select": {
+            "count_per_round": 7.0,
+            "cpu_duration_ms_per_round": 0.04687793103448275
+          },
+          "aten::view": {
+            "count_per_round": 15.0,
+            "cpu_duration_ms_per_round": 0.0496679310344828
+          },
+          "aten::reshape": {
+            "count_per_round": 10.0,
+            "cpu_duration_ms_per_round": 0.1281862068965516
+          },
+          "aten::zero_": {
+            "count_per_round": 34.0,
+            "cpu_duration_ms_per_round": 0.0763117241379311
+          },
+          "aten::bitwise_not": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.029510344827586212
+          },
+          "_build_packed_cache_slot_mapping_kernel": {
+            "count_per_round": 26.0,
+            "cpu_duration_ms_per_round": 0.3151572413793109
+          },
+          "aclnnDivMods": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.010692758620689653
+          },
+          "aten::div": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.0650851724137931
+          },
+          "aclnnRemainderTensorScalar": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.010627586206896552
+          },
+          "aten::remainder": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.032474827586206886
+          },
+          "aten::clamp": {
+            "count_per_round": 78.0,
+            "cpu_duration_ms_per_round": 0.6244655172413787
+          },
+          "aten::detach_": {
+            "count_per_round": 27.0,
+            "cpu_duration_ms_per_round": 0.014393793103448262
+          },
+          "aten::cumsum": {
+            "count_per_round": 26.0,
+            "cpu_duration_ms_per_round": 0.5130441379310346
+          },
+          "aten::narrow": {
+            "count_per_round": 52.0,
+            "cpu_duration_ms_per_round": 0.34576827586206893
+          },
+          "aten::empty_like": {
+            "count_per_round": 52.0,
+            "cpu_duration_ms_per_round": 0.24137965517241414
+          },
+          "aten::cat": {
+            "count_per_round": 26.0,
+            "cpu_duration_ms_per_round": 0.7606237931034482
+          },
+          "aten::gt": {
+            "count_per_round": 78.0,
+            "cpu_duration_ms_per_round": 1.1185986206896559
+          },
+          "aten::bitwise_and": {
+            "count_per_round": 27.0,
+            "cpu_duration_ms_per_round": 0.10540206896551721
+          },
+          "aten::__and__": {
+            "count_per_round": 27.0,
+            "cpu_duration_ms_per_round": 0.15484000000000012
+          },
+          "aten::clamp_min": {
+            "count_per_round": 52.0,
+            "cpu_duration_ms_per_round": 0.4984258620689655
+          },
+          "aten::zeros_like": {
+            "count_per_round": 26.0,
+            "cpu_duration_ms_per_round": 0.23135206896551724
+          },
+          "aten::where": {
+            "count_per_round": 78.0,
+            "cpu_duration_ms_per_round": 1.593017241379308
+          },
+          "aten::clamp_max": {
+            "count_per_round": 26.0,
+            "cpu_duration_ms_per_round": 0.15671137931034473
+          },
+          "aclnnSub": {
+            "count_per_round": 27.0,
+            "cpu_duration_ms_per_round": 0.13427862068965532
+          },
+          "aclnnClampMin": {
+            "count_per_round": 26.0,
+            "cpu_duration_ms_per_round": 0.11776689655172422
+          },
+          "aclnnGtTensor": {
+            "count_per_round": 26.0,
+            "cpu_duration_ms_per_round": 0.11532896551724153
+          },
+          "aten::scalar_tensor": {
+            "count_per_round": 28.0,
+            "cpu_duration_ms_per_round": 0.5714224137931041
+          },
+          "aclnnSWhere": {
+            "count_per_round": 26.0,
+            "cpu_duration_ms_per_round": 0.08515655172413791
+          },
+          "aten::expand": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.032170344827586204
+          },
+          "aclnnGather": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.017602413793103452
+          },
+          "aten::gather": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.0773906896551724
+          },
+          "wait_event": {
+            "count_per_round": 8.0,
+            "cpu_duration_ms_per_round": 0.03114517241379313
+          },
+          "Event::wait": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.05848620689655172
+          },
+          "_build_c2_ring_metadata_kernel": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.014277586206896552
+          },
+          "aclnnSparseFlashMlaMetadata": {
+            "count_per_round": 3.0,
+            "cpu_duration_ms_per_round": 0.018712413793103445
+          },
+          "_C_ascend::npu_sparse_flash_mla_metadata": {
+            "count_per_round": 3.0,
+            "cpu_duration_ms_per_round": 0.3427531034482758
+          },
+          "aclnnVllmAscendQuantLightningIndexerV2Metadata": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.011358275862068964
+          },
+          "_C_ascend::npu_quant_lightning_indexer_v2_metadata": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.12614620689655168
+          },
+          "aclnnEqScalar": {
+            "count_per_round": 5.0,
+            "cpu_duration_ms_per_round": 0.02008103448275862
+          },
+          "aten::eq": {
+            "count_per_round": 6.0,
+            "cpu_duration_ms_per_round": 0.09970413793103453
+          },
+          "aclnnInplaceMaskedFillScalar": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.006278965517241379
+          },
+          "aten::masked_fill_": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.02179068965517241
+          },
+          "aclnnClamp": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.004657241379310345
+          },
+          "aten::clamp_": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.014874137931034483
+          },
+          "aten::zeros": {
+            "count_per_round": 3.0,
+            "cpu_duration_ms_per_round": 0.057151034482758614
+          },
+          "aclnnGeScalar": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.005083793103448275
+          },
+          "aten::ge": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.023678275862068963
+          },
+          "aclnnLtScalar": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.0020986206896551726
+          },
+          "aclnnBitwiseAndTensor": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.002590344827586207
+          },
+          "aclnnMuls": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.0055351724137931045
+          },
+          "aten::mul": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.036021034482758604
+          },
+          "aclnnMul": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.001990344827586207
+          },
+          "aclnnBitwiseNot": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.005145172413793103
+          },
+          "aclnnEmbedding": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.0046344827586206885
+          },
+          "aten::embedding": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.018495517241379312
+          },
+          "aten::unsqueeze": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.006568620689655171
+          },
+          "HcclAllreduce": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.007551034482758623
+          },
+          "c10d::allreduce_": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.06330482758620691
+          },
+          "vllm::all_reduce": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.11994793103448277
+          },
+          "aten::is_nonzero": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.006167241379310346
+          },
+          "aclnnBitwiseOrTensor": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.008987931034482758
+          },
+          "aten::bitwise_or": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.030053793103448277
+          },
+          "aten::__or__": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.034703448275862074
+          },
+          "aclnnInplaceZero": {
+            "count_per_round": 5.0,
+            "cpu_duration_ms_per_round": 0.024395517241379304
+          },
+          "aten::new_empty": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.016634482758620693
+          },
+          "_engram_req_index_kernel": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.009519655172413792
+          },
+          "_write_hash_cache_kernel": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.009820344827586208
+          },
+          "_hash_ids_kernel": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.01421448275862069
+          },
+          "aten::clone": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.11461448275862064
+          },
+          "aten::contiguous": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.05303103448275862
+          },
+          "_engram_host_uva_gather_dequant_kernel": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.021488275862068962
+          },
+          "HcclAllGather": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.004308965517241379
+          },
+          "HcclAllgatherBase": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.010057931034482758
+          },
+          "c10d::_allgather_base_": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.1213793103448276
+          },
+          "aten::permute": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.014736206896551725
+          },
+          "aten::movedim": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.046468620689655175
+          },
+          "aten::_unsafe_view": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.005671724137931034
+          },
+          "vllm::all_gather": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.447345172413793
+          },
+          "aten::alias": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.004109655172413793
+          },
+          "aten::flatten": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.0111648275862069
+          }
+        },
+        "note": "Nested cpu_op durations overlap; do not add them as total CPU time."
+      },
+      "sustained_serving_window": {
+        "definition": "Latest first token of first32 requests through last request dispatch. Fixed concurrency32, includes replacement prefills; not a pure384-concurrent decode plateau.",
+        "start_monotonic": 68717.64291369,
+        "end_monotonic": 69027.41840209,
+        "seconds": 309.77548840000236,
+        "output_tokens": 375499,
+        "output_tokens_per_second": 1212.16498419375
+      }
+    },
+    "dynamic": {
+      "config": {
+        "source_model": "/home/models/DeepSeek-V4.1-Flash-1017-w4a8-Ascend",
+        "runtime_model": "/tmp/p00948912-dsv41-1017-runtime-20261021T081310Z",
+        "devices": [
+          0,
+          1,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ],
+        "port": 18829,
+        "container": "p00948912-dsv41-dev-20261019",
+        "tp": 8,
+        "dp": 1,
+        "ep": 8,
+        "num_draft": 7,
+        "max_num_seqs": 32,
+        "e2e_requests": 384,
+        "e2e_concurrency": 32,
+        "output_tokens": 1024,
+        "ignore_eos": true,
+        "seed": 42,
+        "profile_delay_steps": 100,
+        "profile_steps": 30,
+        "source_untouched": true,
+        "baseline_reference": "/home/p00948912/vllm_profile/dsv41_runtime_metadata_fix_pair_20261022_0126/baseline",
+        "spec_k_config": {
+          "enabled": true,
+          "ppl_thresholds": [
+            128,
+            128,
+            128
+          ],
+          "full_top_k_layer_range": [
+            0,
+            0
+          ],
+          "apply_last_token": false,
+          "log_stats_interval": 100
+        },
+        "mode": "topk",
+        "fix_validation": "/home/p00948912/dsv41_dev_20261019/runtime/spec_k_runtime_metadata_fix_20261022_011829",
+        "same_physical_devices_as_baseline": false,
+        "device_comparison_note": "Previous baseline used6,7,10,11,12,13,14,15; runtime parameters and code are unchanged. Hardware placement differs."
+      },
+      "metrics": {
+        "date": "20261022-021734",
+        "endpoint_type": "vllm",
+        "backend": "vllm",
+        "label": null,
+        "model_id": "/tmp/p00948912-dsv41-1017-runtime-20261021T081310Z",
+        "tokenizer_id": "/tmp/p00948912-dsv41-1017-runtime-20261021T081310Z",
+        "num_prompts": 384,
+        "request_rate": "inf",
+        "burstiness": 1.0,
+        "max_concurrency": 32,
+        "duration": 317.6102655900031,
+        "completed": 384,
+        "failed": 0,
+        "total_input_tokens": 86261,
+        "total_output_tokens": 393216,
+        "request_throughput": 1.209028931374964,
+        "request_goodput": null,
+        "output_throughput": 1238.0456257279632,
+        "total_token_throughput": 1509.6394920022751,
+        "max_output_tokens_per_s": 416.0,
+        "max_concurrent_requests": 37,
+        "rtfx": 0.0,
+        "spec_decode_acceptance_rate": 50.821476922771744,
+        "spec_decode_acceptance_length": 4.557503384594023,
+        "spec_decode_num_drafts": 86421,
+        "spec_decode_draft_tokens": 604947,
+        "spec_decode_accepted_tokens": 307443,
+        "mean_ttft_ms": 760.544953932443,
+        "median_ttft_ms": 465.2676900077495,
+        "std_ttft_ms": 888.3193094630126,
+        "p99_ttft_ms": 4680.233185909601,
+        "mean_tpot_ms": 23.676329006852235,
+        "median_tpot_ms": 21.470019076246157,
+        "std_tpot_ms": 8.765118515832699,
+        "p99_tpot_ms": 49.751326995701916,
+        "mean_itl_ms": 107.62221770657338,
+        "median_itl_ms": 79.58359000622295,
+        "std_itl_ms": 128.38307529483026,
+        "p99_itl_ms": 351.2777979922248,
+        "token_timeline_method": "client SSE arrival perf_counter timestamps, exact len(choice.token_ids) per chunk; no retokenization"
+      },
+      "latencies": {
+        "request_seconds": {
+          "mean": 24.981429527942282,
+          "median": 22.616446720006934,
+          "p90": 38.03447529099503,
+          "p95": 42.89363672199468,
+          "p99": 51.73877633539757,
+          "min": 11.89227517999825,
+          "max": 60.534905070002424,
+          "std": 9.03139318037064,
+          "n": 384
+        },
+        "ttft_ms": {
+          "mean": 760.544953932443,
+          "median": 465.2676900077495,
+          "p90": 919.2406179921818,
+          "p95": 2807.4938134981417,
+          "p99": 4680.233185909601,
+          "min": 339.31582000514027,
+          "max": 4900.613240009989,
+          "std": 888.3193094630126,
+          "n": 384
+        },
+        "tpot_ms": {
+          "mean": 23.67632900685224,
+          "median": 21.470019076246153,
+          "p90": 36.673924775165354,
+          "p95": 41.40709652248278,
+          "p99": 49.75132699570191,
+          "min": 10.988908934505712,
+          "max": 54.59928549365548,
+          "std": 8.765118515832699,
+          "n": 384
+        },
+        "return_chunk_itl_ms": {
+          "mean": 107.62221770657338,
+          "median": 79.58359000622295,
+          "p90": 255.9976699994877,
+          "p95": 277.68332000414375,
+          "p99": 351.2777979922248,
+          "min": 57.62649999815039,
+          "max": 4172.02487999748,
+          "std": 128.38307529483026,
+          "n": 86421
+        }
+      },
+      "accepted_per_position": [
+        0.8275072031103551,
+        0.6970875134515916,
+        0.5933627243378345,
+        0.4941507272537925,
+        0.41944666226958727,
+        0.322780342740769,
+        0.20316821143009223
+      ],
+      "visible_round_accounting": {
+        "decode_exposure_request_seconds": 9300.819676419778,
+        "post_first_tokens": 392832,
+        "post_first_return_chunks": 86421,
+        "tokens_per_return_chunk": 4.545561842607699,
+        "mean_return_interval_ms": 107.62221770657338
+      },
+      "profiling": {
+        "means": {
+          "target_ms": 51.252230603448275,
+          "outside_ms": 45.347391163793105,
+          "cycle_ms": 96.59962176724137,
+          "before_first_draft_fused": 4.085259698275862,
+          "draft_fused_span": 2.0879752155172415,
+          "after_draft_to_last_argmax": 1.7248771551724138,
+          "after_argmax_to_target": 37.44927909482758
+        },
+        "same29_cycle_distribution": {
+          "target_ms": {
+            "mean": 51.252230603448275,
+            "median": 51.22175,
+            "p90": 51.648,
+            "p95": 51.70875,
+            "p99": 53.1941275,
+            "min": 50.3275,
+            "max": 55.1915,
+            "std": 0.4702968914535186,
+            "n": 232
+          },
+          "outside_ms": {
+            "mean": 45.347391163793105,
+            "median": 45.10075,
+            "p90": 48.02762500000001,
+            "p95": 48.655274999999996,
+            "p99": 49.783105,
+            "min": 42.6115,
+            "max": 49.99475,
+            "std": 1.6318851946542794,
+            "n": 232
+          },
+          "cycle_ms": {
+            "mean": 96.59962176724137,
+            "median": 96.322125,
+            "p90": 99.0109,
+            "p95": 101.3719625,
+            "p99": 101.905265,
+            "min": 93.4235,
+            "max": 103.86025,
+            "std": 1.8622984503855753,
+            "n": 232
+          }
+        },
+        "target_kernel_sum_ms": 45.32835796982753,
+        "other_target_kernel_sum_ms": 23.817347818965395,
+        "outside_default_kernel_sum_ms": 10.590884956896543,
+        "target_fused_kernel_share_percent": 40.08206824471697,
+        "cycle_fused_kernel_share_percent": 21.26608124503064,
+        "target_wall_share_percent": 53.05634708067647,
+        "outside_wall_share_percent": 46.94365291932355,
+        "client_phases": {
+          "before_10_intervals": {
+            "interval_count": 10,
+            "mean_ms": 80.18238040531287,
+            "intervals_ms": [
+              80.97674780583475,
+              79.86662125040311,
+              79.31627437938005,
+              80.70705624413677,
+              80.78894030768424,
+              80.36482782335952,
+              78.52963436744176,
+              79.02014312276151,
+              80.83983469987288,
+              81.41372405225411
+            ]
+          },
+          "recorded": {
+            "interval_count": 29,
+            "mean_ms": 96.53087398729785,
+            "intervals_ms": [
+              100.65758062410168,
+              95.72993937763385,
+              95.79334249428939,
+              95.3993615694344,
+              95.28214563033544,
+              96.51673905318603,
+              93.49223219032865,
+              96.84809188183863,
+              96.33592343016062,
+              95.78001000045333,
+              95.25306937575806,
+              95.54494063195307,
+              95.17000561754685,
+              94.92153780593071,
+              96.01637531886809,
+              100.47610812762287,
+              97.03136218013242,
+              96.81538719451055,
+              98.71360281249508,
+              96.74184468167368,
+              99.9556715687504,
+              96.90906500327401,
+              94.63742248772178,
+              97.62439344194718,
+              95.63986843568273,
+              94.35946843586862,
+              96.80969282635488,
+              97.76442529982887,
+              97.17573813395575
+            ]
+          },
+          "after_10_intervals": {
+            "interval_count": 10,
+            "mean_ms": 80.94860514393076,
+            "intervals_ms": [
+              81.2826437613694,
+              81.92738686921075,
+              82.73380625178106,
+              81.09904344019014,
+              80.07727812218945,
+              81.40355031355284,
+              80.88472187228035,
+              77.8494456608314,
+              81.33592452213634,
+              80.89225062576588
+            ]
+          },
+          "after_full_32_only": {
+            "interval_count": 7,
+            "mean_ms": 81.34406151865343,
+            "intervals_ms": [
+              81.2826437613694,
+              81.92738686921075,
+              82.73380625178106,
+              81.09904344019014,
+              80.07727812218945,
+              81.40355031355284,
+              80.88472187228035
+            ]
+          }
+        },
+        "rank_validation": [
+          {
+            "rank": 0,
+            "fused_calls": 1200,
+            "eager_fused_calls": 90,
+            "model_ids": [
+              "49"
+            ],
+            "streams": [
+              "52"
+            ],
+            "router_shapes": {
+              "32,384": 1200
+            }
+          },
+          {
+            "rank": 1,
+            "fused_calls": 1200,
+            "eager_fused_calls": 90,
+            "model_ids": [
+              "49"
+            ],
+            "streams": [
+              "89"
+            ],
+            "router_shapes": {
+              "32,384": 1200
+            }
+          },
+          {
+            "rank": 2,
+            "fused_calls": 1200,
+            "eager_fused_calls": 90,
+            "model_ids": [
+              "49"
+            ],
+            "streams": [
+              "89"
+            ],
+            "router_shapes": {
+              "32,384": 1200
+            }
+          },
+          {
+            "rank": 3,
+            "fused_calls": 1200,
+            "eager_fused_calls": 90,
+            "model_ids": [
+              "49"
+            ],
+            "streams": [
+              "89"
+            ],
+            "router_shapes": {
+              "32,384": 1200
+            }
+          },
+          {
+            "rank": 4,
+            "fused_calls": 1200,
+            "eager_fused_calls": 90,
+            "model_ids": [
+              "49"
+            ],
+            "streams": [
+              "89"
+            ],
+            "router_shapes": {
+              "32,384": 1200
+            }
+          },
+          {
+            "rank": 5,
+            "fused_calls": 1200,
+            "eager_fused_calls": 90,
+            "model_ids": [
+              "49"
+            ],
+            "streams": [
+              "89"
+            ],
+            "router_shapes": {
+              "32,384": 1200
+            }
+          },
+          {
+            "rank": 6,
+            "fused_calls": 1200,
+            "eager_fused_calls": 90,
+            "model_ids": [
+              "49"
+            ],
+            "streams": [
+              "89"
+            ],
+            "router_shapes": {
+              "32,384": 1200
+            }
+          },
+          {
+            "rank": 7,
+            "fused_calls": 1200,
+            "eager_fused_calls": 90,
+            "model_ids": [
+              "49"
+            ],
+            "streams": [
+              "89"
+            ],
+            "router_shapes": {
+              "32,384": 1200
+            }
+          }
+        ],
+        "hardware_tasks": {
+          "ranks": [
+            {
+              "rank": 0,
+              "physical_device": 0,
+              "target_stream": "52",
+              "means": {
+                "target_ms": 51.26245689655172,
+                "outside_ms": 45.353206896551725,
+                "cycle_ms": 96.61566379310344
+              },
+              "target_task_union_ms": 50.536500000000004,
+              "outside_default_task_union_ms": 16.104586206896553,
+              "types": {
+                "target": {
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 976.0000000000003,
+                    "ms_per_cycle": 9.220198275862055
+                  },
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 0.0046551724137931065
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 4.955767241379308
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 91.00000000000004,
+                    "ms_per_cycle": 0.05802586206896556
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 295.9999999999999,
+                    "ms_per_cycle": 30.552741379310348
+                  },
+                  "MEM_WAIT_VALUE": {
+                    "calls_per_cycle": 18.000000000000007,
+                    "ms_per_cycle": 0.008948275862068963
+                  },
+                  "MEM_WRITE_VALUE": {
+                    "calls_per_cycle": 6.0,
+                    "ms_per_cycle": 0.0007155172413793102
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 175.0,
+                    "ms_per_cycle": 5.526112068965518
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 10.000000000000005,
+                    "ms_per_cycle": 0.14892241379310342
+                  },
+                  "EVENT_RESET": {
+                    "calls_per_cycle": 649.4482758620686,
+                    "ms_per_cycle": 0.060396551724137985
+                  },
+                  "NOTIFY_RECORD": {
+                    "calls_per_cycle": 0.06896551724137931,
+                    "ms_per_cycle": 1.7241379310344828e-05
+                  }
+                },
+                "outside_default": {
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 96.99999999999993,
+                    "ms_per_cycle": 0.0013189655172413791
+                  },
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 590.9999999999995,
+                    "ms_per_cycle": 7.552474137931038
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 18.999999999999996,
+                    "ms_per_cycle": 1.258991379310345
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 5.234025862068965
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 109.00000000000004,
+                    "ms_per_cycle": 0.2642413793103449
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 9.000000000000004,
+                    "ms_per_cycle": 0.1017241379310345
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 1.6884224137931036
+                  },
+                  "MODEL_EXECUTE": {
+                    "calls_per_cycle": 0.9999999999999996,
+                    "ms_per_cycle": 0.003387931034482759
+                  }
+                }
+              }
+            },
+            {
+              "rank": 1,
+              "physical_device": 1,
+              "target_stream": "89",
+              "means": {
+                "target_ms": 51.35168103448276,
+                "outside_ms": 45.32377586206896,
+                "cycle_ms": 96.67545689655172
+              },
+              "target_task_union_ms": 50.62922413793103,
+              "outside_default_task_union_ms": 19.228784482758623,
+              "types": {
+                "target": {
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 976.0000000000003,
+                    "ms_per_cycle": 9.187155172413785
+                  },
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 0.006370689655172418
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 5.2592758620689635
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 91.00000000000004,
+                    "ms_per_cycle": 0.0591120689655173
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 295.9999999999999,
+                    "ms_per_cycle": 30.449577586206914
+                  },
+                  "MEM_WAIT_VALUE": {
+                    "calls_per_cycle": 18.000000000000007,
+                    "ms_per_cycle": 0.008999999999999998
+                  },
+                  "MEM_WRITE_VALUE": {
+                    "calls_per_cycle": 6.0,
+                    "ms_per_cycle": 0.0007068965517241379
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 175.0,
+                    "ms_per_cycle": 5.453198275862071
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 10.000000000000005,
+                    "ms_per_cycle": 0.14444827586206896
+                  },
+                  "EVENT_RESET": {
+                    "calls_per_cycle": 649.3448275862066,
+                    "ms_per_cycle": 0.060353448275862115
+                  },
+                  "NOTIFY_RECORD": {
+                    "calls_per_cycle": 0.10344827586206896,
+                    "ms_per_cycle": 2.586206896551724e-05
+                  }
+                },
+                "outside_default": {
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 96.99999999999993,
+                    "ms_per_cycle": 0.0015172413793103443
+                  },
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 590.9999999999995,
+                    "ms_per_cycle": 7.555413793103452
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 18.999999999999996,
+                    "ms_per_cycle": 1.2507413793103448
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 8.35196551724138
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 109.00000000000004,
+                    "ms_per_cycle": 0.26362931034482767
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 9.000000000000004,
+                    "ms_per_cycle": 0.10275862068965515
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 1.6996896551724139
+                  },
+                  "MODEL_EXECUTE": {
+                    "calls_per_cycle": 0.9999999999999996,
+                    "ms_per_cycle": 0.0030689655172413794
+                  }
+                }
+              }
+            },
+            {
+              "rank": 2,
+              "physical_device": 6,
+              "target_stream": "89",
+              "means": {
+                "target_ms": 51.218034482758625,
+                "outside_ms": 45.32275,
+                "cycle_ms": 96.54078448275862
+              },
+              "target_task_union_ms": 50.4915775862069,
+              "outside_default_task_union_ms": 16.821620689655173,
+              "types": {
+                "target": {
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 976.0000000000003,
+                    "ms_per_cycle": 9.25893965517241
+                  },
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 0.004974137931034486
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 4.993241379310345
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 91.00000000000004,
+                    "ms_per_cycle": 0.05868965517241384
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 295.9999999999999,
+                    "ms_per_cycle": 30.48950000000001
+                  },
+                  "MEM_WAIT_VALUE": {
+                    "calls_per_cycle": 18.000000000000007,
+                    "ms_per_cycle": 0.008905172413793102
+                  },
+                  "MEM_WRITE_VALUE": {
+                    "calls_per_cycle": 6.0,
+                    "ms_per_cycle": 0.0007327586206896551
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 175.0,
+                    "ms_per_cycle": 5.472500000000001
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 10.000000000000005,
+                    "ms_per_cycle": 0.14389655172413793
+                  },
+                  "EVENT_RESET": {
+                    "calls_per_cycle": 649.4482758620687,
+                    "ms_per_cycle": 0.06017241379310351
+                  },
+                  "NOTIFY_RECORD": {
+                    "calls_per_cycle": 0.10344827586206896,
+                    "ms_per_cycle": 2.586206896551724e-05
+                  }
+                },
+                "outside_default": {
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 96.99999999999993,
+                    "ms_per_cycle": 0.0011982758620689652
+                  },
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 590.9999999999995,
+                    "ms_per_cycle": 7.561732758620694
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 18.999999999999996,
+                    "ms_per_cycle": 1.2440258620689655
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 5.962017241379311
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 109.00000000000004,
+                    "ms_per_cycle": 0.26329310344827594
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 9.000000000000004,
+                    "ms_per_cycle": 0.1027758620689655
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 1.6833965517241385
+                  },
+                  "MODEL_EXECUTE": {
+                    "calls_per_cycle": 0.9999999999999996,
+                    "ms_per_cycle": 0.003181034482758621
+                  }
+                }
+              }
+            },
+            {
+              "rank": 3,
+              "physical_device": 7,
+              "target_stream": "89",
+              "means": {
+                "target_ms": 51.21205172413793,
+                "outside_ms": 45.398956896551724,
+                "cycle_ms": 96.61100862068966
+              },
+              "target_task_union_ms": 50.485982758620686,
+              "outside_default_task_union_ms": 15.08353448275862,
+              "types": {
+                "target": {
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 976.0000000000003,
+                    "ms_per_cycle": 9.049879310344817
+                  },
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 0.0046465517241379315
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 5.052163793103446
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 91.00000000000004,
+                    "ms_per_cycle": 0.05831896551724141
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 295.9999999999999,
+                    "ms_per_cycle": 30.62306896551725
+                  },
+                  "MEM_WAIT_VALUE": {
+                    "calls_per_cycle": 18.000000000000007,
+                    "ms_per_cycle": 0.008931034482758619
+                  },
+                  "MEM_WRITE_VALUE": {
+                    "calls_per_cycle": 6.0,
+                    "ms_per_cycle": 0.0008965517241379307
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 175.0,
+                    "ms_per_cycle": 5.4881551724137925
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 10.000000000000005,
+                    "ms_per_cycle": 0.13931034482758617
+                  },
+                  "EVENT_RESET": {
+                    "calls_per_cycle": 649.5517241379308,
+                    "ms_per_cycle": 0.060586206896551774
+                  },
+                  "NOTIFY_RECORD": {
+                    "calls_per_cycle": 0.10344827586206896,
+                    "ms_per_cycle": 2.586206896551724e-05
+                  }
+                },
+                "outside_default": {
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 96.99999999999993,
+                    "ms_per_cycle": 0.0014137931034482758
+                  },
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 590.9999999999995,
+                    "ms_per_cycle": 7.505801724137937
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 18.999999999999996,
+                    "ms_per_cycle": 1.2414396551724136
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 4.2779655172413795
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 109.00000000000004,
+                    "ms_per_cycle": 0.2655862068965518
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 9.000000000000004,
+                    "ms_per_cycle": 0.10052586206896551
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 1.6875775862068967
+                  },
+                  "MODEL_EXECUTE": {
+                    "calls_per_cycle": 0.9999999999999996,
+                    "ms_per_cycle": 0.0032241379310344836
+                  }
+                }
+              }
+            },
+            {
+              "rank": 4,
+              "physical_device": 8,
+              "target_stream": "89",
+              "means": {
+                "target_ms": 51.29043965517241,
+                "outside_ms": 45.32599137931034,
+                "cycle_ms": 96.61643103448276
+              },
+              "target_task_union_ms": 50.568137931034485,
+              "outside_default_task_union_ms": 17.875172413793102,
+              "types": {
+                "target": {
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 976.0000000000003,
+                    "ms_per_cycle": 9.121560344827579
+                  },
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 0.006008620689655176
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 5.029043103448277
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 91.00000000000004,
+                    "ms_per_cycle": 0.05776724137931038
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 295.9999999999999,
+                    "ms_per_cycle": 30.666379310344844
+                  },
+                  "MEM_WAIT_VALUE": {
+                    "calls_per_cycle": 18.000000000000007,
+                    "ms_per_cycle": 0.008801724137931032
+                  },
+                  "MEM_WRITE_VALUE": {
+                    "calls_per_cycle": 6.0,
+                    "ms_per_cycle": 0.0007586206896551723
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 175.0,
+                    "ms_per_cycle": 5.476336206896555
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 10.000000000000005,
+                    "ms_per_cycle": 0.14077586206896553
+                  },
+                  "EVENT_RESET": {
+                    "calls_per_cycle": 649.51724137931,
+                    "ms_per_cycle": 0.06069827586206903
+                  },
+                  "NOTIFY_RECORD": {
+                    "calls_per_cycle": 0.034482758620689655,
+                    "ms_per_cycle": 8.620689655172414e-06
+                  }
+                },
+                "outside_default": {
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 96.99999999999993,
+                    "ms_per_cycle": 0.0016379310344827585
+                  },
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 590.9999999999995,
+                    "ms_per_cycle": 7.5495344827586255
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 18.999999999999996,
+                    "ms_per_cycle": 1.2538706896551728
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 7.0053620689655185
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 109.00000000000004,
+                    "ms_per_cycle": 0.26915517241379316
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 9.000000000000004,
+                    "ms_per_cycle": 0.10252586206896548
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 1.6899482758620692
+                  },
+                  "MODEL_EXECUTE": {
+                    "calls_per_cycle": 0.9999999999999996,
+                    "ms_per_cycle": 0.0031379310344827574
+                  }
+                }
+              }
+            },
+            {
+              "rank": 5,
+              "physical_device": 9,
+              "target_stream": "89",
+              "means": {
+                "target_ms": 51.22666379310345,
+                "outside_ms": 45.36743965517241,
+                "cycle_ms": 96.59410344827587
+              },
+              "target_task_union_ms": 50.50169827586207,
+              "outside_default_task_union_ms": 16.309594827586206,
+              "types": {
+                "target": {
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 976.0000000000003,
+                    "ms_per_cycle": 9.26765517241378
+                  },
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 0.0046982758620689674
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 5.307310344827588
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 91.00000000000004,
+                    "ms_per_cycle": 0.05818965517241384
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 295.9999999999999,
+                    "ms_per_cycle": 30.191810344827605
+                  },
+                  "MEM_WAIT_VALUE": {
+                    "calls_per_cycle": 18.000000000000007,
+                    "ms_per_cycle": 0.00897413793103448
+                  },
+                  "MEM_WRITE_VALUE": {
+                    "calls_per_cycle": 6.0,
+                    "ms_per_cycle": 0.0007844827586206895
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 175.0,
+                    "ms_per_cycle": 5.463810344827586
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 10.000000000000005,
+                    "ms_per_cycle": 0.13795689655172413
+                  },
+                  "EVENT_RESET": {
+                    "calls_per_cycle": 649.51724137931,
+                    "ms_per_cycle": 0.060508620689655214
+                  }
+                },
+                "outside_default": {
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 96.99999999999993,
+                    "ms_per_cycle": 0.0012844827586206895
+                  },
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 590.9999999999995,
+                    "ms_per_cycle": 7.550439655172421
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 18.999999999999996,
+                    "ms_per_cycle": 1.2474396551724136
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 5.44081896551724
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 109.00000000000004,
+                    "ms_per_cycle": 0.26983620689655186
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 9.000000000000004,
+                    "ms_per_cycle": 0.09833620689655173
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 1.6982844827586208
+                  },
+                  "MODEL_EXECUTE": {
+                    "calls_per_cycle": 0.9999999999999996,
+                    "ms_per_cycle": 0.003155172413793104
+                  }
+                }
+              }
+            },
+            {
+              "rank": 6,
+              "physical_device": 10,
+              "target_stream": "89",
+              "means": {
+                "target_ms": 51.251586206896555,
+                "outside_ms": 45.35288793103449,
+                "cycle_ms": 96.60447413793104
+              },
+              "target_task_union_ms": 50.52606896551725,
+              "outside_default_task_union_ms": 16.891241379310344,
+              "types": {
+                "target": {
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 976.0000000000003,
+                    "ms_per_cycle": 9.434310344827574
+                  },
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 0.0056551724137931065
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 5.033482758620688
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 91.00000000000004,
+                    "ms_per_cycle": 0.058155172413793144
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 295.9999999999999,
+                    "ms_per_cycle": 30.329379310344834
+                  },
+                  "MEM_WAIT_VALUE": {
+                    "calls_per_cycle": 18.000000000000007,
+                    "ms_per_cycle": 0.008870689655172412
+                  },
+                  "MEM_WRITE_VALUE": {
+                    "calls_per_cycle": 6.0,
+                    "ms_per_cycle": 0.0006982758620689653
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 175.0,
+                    "ms_per_cycle": 5.453620689655175
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 10.000000000000005,
+                    "ms_per_cycle": 0.14139655172413793
+                  },
+                  "EVENT_RESET": {
+                    "calls_per_cycle": 649.6896551724135,
+                    "ms_per_cycle": 0.06047413793103452
+                  },
+                  "NOTIFY_RECORD": {
+                    "calls_per_cycle": 0.10344827586206896,
+                    "ms_per_cycle": 2.586206896551724e-05
+                  }
+                },
+                "outside_default": {
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 96.99999999999993,
+                    "ms_per_cycle": 0.0012931034482758618
+                  },
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 590.9999999999995,
+                    "ms_per_cycle": 7.583956896551731
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 18.999999999999996,
+                    "ms_per_cycle": 1.2401810344827586
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 6.007543103448276
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 109.00000000000004,
+                    "ms_per_cycle": 0.26735344827586216
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 9.000000000000004,
+                    "ms_per_cycle": 0.10185344827586205
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 1.685801724137931
+                  },
+                  "MODEL_EXECUTE": {
+                    "calls_per_cycle": 0.9999999999999996,
+                    "ms_per_cycle": 0.0032586206896551735
+                  }
+                }
+              }
+            },
+            {
+              "rank": 7,
+              "physical_device": 11,
+              "target_stream": "89",
+              "means": {
+                "target_ms": 51.204931034482755,
+                "outside_ms": 45.33412068965517,
+                "cycle_ms": 96.53905172413793
+              },
+              "target_task_union_ms": 50.47960344827586,
+              "outside_default_task_union_ms": 16.859318965517243,
+              "types": {
+                "target": {
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 976.0000000000003,
+                    "ms_per_cycle": 9.121956896551717
+                  },
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 0.004836206896551727
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 262.00000000000017,
+                    "ms_per_cycle": 4.892801724137931
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 91.00000000000004,
+                    "ms_per_cycle": 0.05813793103448281
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 295.9999999999999,
+                    "ms_per_cycle": 30.697163793103467
+                  },
+                  "MEM_WAIT_VALUE": {
+                    "calls_per_cycle": 18.000000000000007,
+                    "ms_per_cycle": 0.008931034482758619
+                  },
+                  "MEM_WRITE_VALUE": {
+                    "calls_per_cycle": 6.0,
+                    "ms_per_cycle": 0.0008017241379310343
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 175.0,
+                    "ms_per_cycle": 5.491508620689656
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 10.000000000000005,
+                    "ms_per_cycle": 0.14332758620689656
+                  },
+                  "EVENT_RESET": {
+                    "calls_per_cycle": 649.3448275862065,
+                    "ms_per_cycle": 0.0601379310344828
+                  }
+                },
+                "outside_default": {
+                  "EVENT_RECORD": {
+                    "calls_per_cycle": 96.99999999999993,
+                    "ms_per_cycle": 0.0014310344827586205
+                  },
+                  "AI_VECTOR_CORE": {
+                    "calls_per_cycle": 590.9999999999995,
+                    "ms_per_cycle": 7.544732758620698
+                  },
+                  "AI_CORE": {
+                    "calls_per_cycle": 18.999999999999996,
+                    "ms_per_cycle": 1.2425603448275861
+                  },
+                  "EVENT_WAIT": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 6.00053448275862
+                  },
+                  "MEMCPY_ASYNC": {
+                    "calls_per_cycle": 109.00000000000004,
+                    "ms_per_cycle": 0.2671120689655173
+                  },
+                  "MIX_AIV": {
+                    "calls_per_cycle": 9.000000000000004,
+                    "ms_per_cycle": 0.10186206896551722
+                  },
+                  "MIX_AIC": {
+                    "calls_per_cycle": 26.999999999999986,
+                    "ms_per_cycle": 1.6980086206896559
+                  },
+                  "MODEL_EXECUTE": {
+                    "calls_per_cycle": 0.9999999999999996,
+                    "ms_per_cycle": 0.003077586206896551
+                  }
+                }
+              }
+            }
+          ],
+          "eight_rank_mean": {
+            "target": {
+              "AI_VECTOR_CORE": {
+                "calls_per_cycle": 976.0000000000002,
+                "ms_per_cycle": 9.207706896551716
+              },
+              "EVENT_RECORD": {
+                "calls_per_cycle": 262.00000000000017,
+                "ms_per_cycle": 0.005230603448275865
+              },
+              "EVENT_WAIT": {
+                "calls_per_cycle": 262.00000000000017,
+                "ms_per_cycle": 5.065385775862069
+              },
+              "MEMCPY_ASYNC": {
+                "calls_per_cycle": 91.00000000000003,
+                "ms_per_cycle": 0.05829956896551729
+              },
+              "MIX_AIC": {
+                "calls_per_cycle": 295.99999999999994,
+                "ms_per_cycle": 30.49995258620691
+              },
+              "MEM_WAIT_VALUE": {
+                "calls_per_cycle": 18.000000000000004,
+                "ms_per_cycle": 0.008920258620689653
+              },
+              "MEM_WRITE_VALUE": {
+                "calls_per_cycle": 6.0,
+                "ms_per_cycle": 0.0007618534482758619
+              },
+              "AI_CORE": {
+                "calls_per_cycle": 175.0,
+                "ms_per_cycle": 5.4781551724137945
+              },
+              "MIX_AIV": {
+                "calls_per_cycle": 10.000000000000005,
+                "ms_per_cycle": 0.14250431034482758
+              },
+              "EVENT_RESET": {
+                "calls_per_cycle": 649.4827586206893,
+                "ms_per_cycle": 0.06041594827586212
+              },
+              "NOTIFY_RECORD": {
+                "calls_per_cycle": 0.06465517241379311,
+                "ms_per_cycle": 1.6163793103448276e-05
+              }
+            },
+            "outside_default": {
+              "EVENT_RECORD": {
+                "calls_per_cycle": 96.99999999999991,
+                "ms_per_cycle": 0.0013868534482758617
+              },
+              "AI_VECTOR_CORE": {
+                "calls_per_cycle": 590.9999999999995,
+                "ms_per_cycle": 7.550510775862074
+              },
+              "AI_CORE": {
+                "calls_per_cycle": 18.999999999999996,
+                "ms_per_cycle": 1.2474062500000003
+              },
+              "EVENT_WAIT": {
+                "calls_per_cycle": 26.999999999999993,
+                "ms_per_cycle": 6.035029094827586
+              },
+              "MEMCPY_ASYNC": {
+                "calls_per_cycle": 109.00000000000003,
+                "ms_per_cycle": 0.2662758620689656
+              },
+              "MIX_AIV": {
+                "calls_per_cycle": 9.000000000000002,
+                "ms_per_cycle": 0.10154525862068965
+              },
+              "MIX_AIC": {
+                "calls_per_cycle": 26.999999999999993,
+                "ms_per_cycle": 1.6913911637931038
+              },
+              "MODEL_EXECUTE": {
+                "calls_per_cycle": 0.9999999999999998,
+                "ms_per_cycle": 0.003186422413793104
+              }
+            }
+          },
+          "note": "Target tasks from target stream; outside tasks from default stream47 only. Durations are clipped to same29-cycle windows. Other streams can overlap these tasks; EVENT_WAIT is not automatically pure communication."
+        }
+      },
+      "rank0_cpu_outside": {
+        "count_per_round": 4993.0344827586205,
+        "operators": {
+          "aten::detach": {
+            "count_per_round": 3.0,
+            "cpu_duration_ms_per_round": 0.007655862068965517
+          },
+          "aten::to": {
+            "count_per_round": 340.0,
+            "cpu_duration_ms_per_round": 2.463804482758618
+          },
+          "aten::resolve_conj": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.0033668965517241367
+          },
+          "aten::resolve_neg": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.002822068965517239
+          },
+          "aten::is_pinned": {
+            "count_per_round": 62.0,
+            "cpu_duration_ms_per_round": 0.4884379310344828
+          },
+          "aten::pin_memory": {
+            "count_per_round": 62.0,
+            "cpu_duration_ms_per_round": 1.7727200000000005
+          },
+          "acl_memcpy_host_to_device": {
+            "count_per_round": 62.0,
+            "cpu_duration_ms_per_round": 0.41441620689655134
+          },
+          "aten::copy_": {
+            "count_per_round": 274.0,
+            "cpu_duration_ms_per_round": 1.8824848275862147
+          },
+          "aten::as_strided": {
+            "count_per_round": 877.0,
+            "cpu_duration_ms_per_round": 2.43143448275863
+          },
+          "aten::slice": {
+            "count_per_round": 853.0,
+            "cpu_duration_ms_per_round": 5.435590689655163
+          },
+          "compute_slot_mapping_fused_groups_adaptive_kernel": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.012845862068965515
+          },
+          "aten::lift_fresh": {
+            "count_per_round": 33.0,
+            "cpu_duration_ms_per_round": 0.026315862068965558
+          },
+          "aten::set_": {
+            "count_per_round": 57.0,
+            "cpu_duration_ms_per_round": 0.17397862068965542
+          },
+          "aten::_pin_memory": {
+            "count_per_round": 57.0,
+            "cpu_duration_ms_per_round": 1.083735517241381
+          },
+          "empty_tensor": {
+            "count_per_round": 223.0,
+            "cpu_duration_ms_per_round": 0.7461844827586203
+          },
+          "aten::empty_strided": {
+            "count_per_round": 168.0,
+            "cpu_duration_ms_per_round": 0.7269813793103432
+          },
+          "aten::_to_copy": {
+            "count_per_round": 142.0,
+            "cpu_duration_ms_per_round": 1.864675517241378
+          },
+          "Event::query": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.043388965517241376
+          },
+          "destroy_event": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.01016
+          },
+          "record_event": {
+            "count_per_round": 75.0,
+            "cpu_duration_ms_per_round": 0.3295648275862066
+          },
+          "Event::record": {
+            "count_per_round": 3.0344827586206895,
+            "cpu_duration_ms_per_round": 0.17137482758620684
+          },
+          "aclnnIndex": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.010218275862068964
+          },
+          "aten::index": {
+            "count_per_round": 6.0,
+            "cpu_duration_ms_per_round": 0.1803037931034483
+          },
+          "aten::_local_scalar_dense": {
+            "count_per_round": 65.0,
+            "cpu_duration_ms_per_round": 0.08307275862068984
+          },
+          "aten::item": {
+            "count_per_round": 65.0,
+            "cpu_duration_ms_per_round": 0.1738510344827585
+          },
+          "aclnnAdds": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.0039441379310344825
+          },
+          "aten::add": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.021393793103448275
+          },
+          "Event::synchronize": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.04391896551724138
+          },
+          "aclnnInplaceFillScalar": {
+            "count_per_round": 55.0,
+            "cpu_duration_ms_per_round": 0.30101379310344817
+          },
+          "aten::fill_": {
+            "count_per_round": 114.0,
+            "cpu_duration_ms_per_round": 0.7220941379310353
+          },
+          "aten::lt": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.024476206896551722
+          },
+          "aclnnInplaceCopy": {
+            "count_per_round": 16.0,
+            "cpu_duration_ms_per_round": 0.07841793103448284
+          },
+          "aten::empty": {
+            "count_per_round": 199.0,
+            "cpu_duration_ms_per_round": 0.6798806896551698
+          },
+          "aten::max": {
+            "count_per_round": 54.0,
+            "cpu_duration_ms_per_round": 0.36250068965517274
+          },
+          "aten::sub": {
+            "count_per_round": 159.0,
+            "cpu_duration_ms_per_round": 1.1579803448275832
+          },
+          "aten::sum": {
+            "count_per_round": 12.0,
+            "cpu_duration_ms_per_round": 0.27874034482758603
+          },
+          "aten::as_strided_": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.011996206896551724
+          },
+          "aten::nonzero": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.0473686206896552
+          },
+          "aten::select": {
+            "count_per_round": 7.0,
+            "cpu_duration_ms_per_round": 0.046227586206896515
+          },
+          "aten::view": {
+            "count_per_round": 15.0,
+            "cpu_duration_ms_per_round": 0.04837931034482759
+          },
+          "aten::reshape": {
+            "count_per_round": 10.0,
+            "cpu_duration_ms_per_round": 0.1297662068965517
+          },
+          "aten::zero_": {
+            "count_per_round": 34.0,
+            "cpu_duration_ms_per_round": 0.07511241379310357
+          },
+          "aten::bitwise_not": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.03032137931034483
+          },
+          "_build_packed_cache_slot_mapping_kernel": {
+            "count_per_round": 26.0,
+            "cpu_duration_ms_per_round": 0.31985896551724147
+          },
+          "aclnnDivMods": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.010523793103448278
+          },
+          "aten::div": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.06325931034482761
+          },
+          "aclnnRemainderTensorScalar": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.010475172413793105
+          },
+          "aten::remainder": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.032540344827586214
+          },
+          "aten::clamp": {
+            "count_per_round": 78.0,
+            "cpu_duration_ms_per_round": 0.6419386206896556
+          },
+          "aten::detach_": {
+            "count_per_round": 27.0,
+            "cpu_duration_ms_per_round": 0.014706206896551739
+          },
+          "aten::cumsum": {
+            "count_per_round": 26.0,
+            "cpu_duration_ms_per_round": 0.5300851724137932
+          },
+          "aten::narrow": {
+            "count_per_round": 52.0,
+            "cpu_duration_ms_per_round": 0.348518620689655
+          },
+          "aten::empty_like": {
+            "count_per_round": 52.0,
+            "cpu_duration_ms_per_round": 0.2372086206896549
+          },
+          "aten::cat": {
+            "count_per_round": 26.0,
+            "cpu_duration_ms_per_round": 0.7664010344827578
+          },
+          "aten::gt": {
+            "count_per_round": 78.0,
+            "cpu_duration_ms_per_round": 1.1409027586206886
+          },
+          "aten::bitwise_and": {
+            "count_per_round": 27.0,
+            "cpu_duration_ms_per_round": 0.10548172413793117
+          },
+          "aten::__and__": {
+            "count_per_round": 27.0,
+            "cpu_duration_ms_per_round": 0.1576055172413794
+          },
+          "aten::clamp_min": {
+            "count_per_round": 52.0,
+            "cpu_duration_ms_per_round": 0.5017796551724133
+          },
+          "aten::zeros_like": {
+            "count_per_round": 26.0,
+            "cpu_duration_ms_per_round": 0.2269951724137932
+          },
+          "aten::where": {
+            "count_per_round": 78.0,
+            "cpu_duration_ms_per_round": 1.5838517241379302
+          },
+          "aten::clamp_max": {
+            "count_per_round": 26.0,
+            "cpu_duration_ms_per_round": 0.16116068965517244
+          },
+          "aclnnSub": {
+            "count_per_round": 27.0,
+            "cpu_duration_ms_per_round": 0.1440713793103449
+          },
+          "aclnnClampMin": {
+            "count_per_round": 26.0,
+            "cpu_duration_ms_per_round": 0.12338206896551727
+          },
+          "aclnnGtTensor": {
+            "count_per_round": 26.0,
+            "cpu_duration_ms_per_round": 0.12110379310344828
+          },
+          "aten::scalar_tensor": {
+            "count_per_round": 28.0,
+            "cpu_duration_ms_per_round": 0.5674696551724142
+          },
+          "aclnnSWhere": {
+            "count_per_round": 26.0,
+            "cpu_duration_ms_per_round": 0.09188689655172408
+          },
+          "aten::expand": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.029115517241379313
+          },
+          "aclnnGather": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.01954758620689655
+          },
+          "aten::gather": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.0736186206896552
+          },
+          "wait_event": {
+            "count_per_round": 8.0,
+            "cpu_duration_ms_per_round": 0.031833793103448256
+          },
+          "Event::wait": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.05862103448275863
+          },
+          "_build_c2_ring_metadata_kernel": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.013663793103448275
+          },
+          "aclnnSparseFlashMlaMetadata": {
+            "count_per_round": 3.0,
+            "cpu_duration_ms_per_round": 0.01949137931034483
+          },
+          "_C_ascend::npu_sparse_flash_mla_metadata": {
+            "count_per_round": 3.0,
+            "cpu_duration_ms_per_round": 0.6526455172413793
+          },
+          "aclnnVllmAscendQuantLightningIndexerV2Metadata": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.012549310344827591
+          },
+          "_C_ascend::npu_quant_lightning_indexer_v2_metadata": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.20215689655172417
+          },
+          "aclnnEqScalar": {
+            "count_per_round": 5.0,
+            "cpu_duration_ms_per_round": 0.02096379310344827
+          },
+          "aten::eq": {
+            "count_per_round": 6.0,
+            "cpu_duration_ms_per_round": 0.10299551724137933
+          },
+          "aclnnInplaceMaskedFillScalar": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.007515172413793106
+          },
+          "aten::masked_fill_": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.022448275862068975
+          },
+          "aclnnClamp": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.005922758620689654
+          },
+          "aten::clamp_": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.016033103448275864
+          },
+          "aten::zeros": {
+            "count_per_round": 3.0,
+            "cpu_duration_ms_per_round": 0.05464068965517244
+          },
+          "aclnnGeScalar": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.005868275862068966
+          },
+          "aten::ge": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.025345862068965518
+          },
+          "aclnnLtScalar": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.002922413793103448
+          },
+          "aclnnBitwiseAndTensor": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.0030500000000000006
+          },
+          "aclnnMuls": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.00436448275862069
+          },
+          "aten::mul": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.03575103448275863
+          },
+          "aclnnMul": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.0022651724137931033
+          },
+          "aclnnBitwiseNot": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.005599655172413794
+          },
+          "aclnnEmbedding": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.0047848275862068974
+          },
+          "aten::embedding": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.017535517241379313
+          },
+          "aten::unsqueeze": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.007201379310344826
+          },
+          "HcclAllreduce": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.007487586206896552
+          },
+          "c10d::allreduce_": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.0664948275862069
+          },
+          "vllm::all_reduce": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.12607206896551726
+          },
+          "_prepare_budgets": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.011969310344827585
+          },
+          "aten::is_nonzero": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.005974137931034483
+          },
+          "aclnnBitwiseOrTensor": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.008993448275862069
+          },
+          "aten::bitwise_or": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.03026206896551724
+          },
+          "aten::__or__": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.03501034482758622
+          },
+          "aclnnInplaceZero": {
+            "count_per_round": 5.0,
+            "cpu_duration_ms_per_round": 0.024763448275862063
+          },
+          "aten::new_empty": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.019256206896551723
+          },
+          "_engram_req_index_kernel": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.010299310344827584
+          },
+          "_write_hash_cache_kernel": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.010637241379310346
+          },
+          "_hash_ids_kernel": {
+            "count_per_round": 1.0,
+            "cpu_duration_ms_per_round": 0.012903448275862069
+          },
+          "aten::clone": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.11664413793103451
+          },
+          "aten::contiguous": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.05283172413793103
+          },
+          "_engram_host_uva_gather_dequant_kernel": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.019132413793103445
+          },
+          "HcclAllGather": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.004198965517241379
+          },
+          "HcclAllgatherBase": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.009683448275862072
+          },
+          "c10d::_allgather_base_": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.1215389655172414
+          },
+          "aten::permute": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.01456724137931034
+          },
+          "aten::movedim": {
+            "count_per_round": 4.0,
+            "cpu_duration_ms_per_round": 0.04752724137931035
+          },
+          "aten::_unsafe_view": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.0057565517241379306
+          },
+          "vllm::all_gather": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.45686000000000004
+          },
+          "aten::alias": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.0037610344827586203
+          },
+          "aten::flatten": {
+            "count_per_round": 2.0,
+            "cpu_duration_ms_per_round": 0.010920000000000001
+          }
+        },
+        "note": "Nested cpu_op durations overlap; do not add them as total CPU time."
+      },
+      "sustained_serving_window": {
+        "definition": "Latest first token of first32 requests through last request dispatch. Fixed concurrency32, includes replacement prefills; not a pure384-concurrent decode plateau.",
+        "start_monotonic": 71267.57078911,
+        "end_monotonic": 71551.14636091,
+        "seconds": 283.57557180000003,
+        "output_tokens": 374255,
+        "output_tokens_per_second": 1319.7716489626064
+      }
+    }
+  },
+  "actual_topk": {
+    "definition": "Actual target verification input-token budget; padding/prefill excluded, final Top-6 position included; not accepted tokens only or rank-local expert counts.",
+    "e2e384": {
+      "tokens": 693840,
+      "top_k_sum": 2370567,
+      "avg_top_k": 3.4165902801798684,
+      "histogram": {
+        "1": 0,
+        "2": 0,
+        "3": 597491,
+        "4": 0,
+        "5": 0,
+        "6": 96349
+      }
+    },
+    "e2e384_session": 3,
+    "profile": {
+      "tokens": 7680,
+      "top_k_sum": 26487,
+      "avg_top_k": 3.448828125,
+      "histogram": {
+        "1": 0,
+        "2": 0,
+        "3": 6531,
+        "4": 0,
+        "5": 0,
+        "6": 1149
+      }
+    },
+    "profile_session": 5,
+    "profile_id": 1,
+    "all_final_sessions": [
+      {
+        "session": 1,
+        "scope": "workload",
+        "tokens": 72,
+        "top_k_sum": 246,
+        "avg_top_k": 3.4166666666666665,
+        "histogram": {
+          "1": 0,
+          "2": 0,
+          "3": 62,
+          "4": 0,
+          "5": 0,
+          "6": 10
+        }
+      },
+      {
+        "session": 2,
+        "scope": "workload",
+        "tokens": 1312,
+        "top_k_sum": 4506,
+        "avg_top_k": 3.4344512195121952,
+        "histogram": {
+          "1": 0,
+          "2": 0,
+          "3": 1122,
+          "4": 0,
+          "5": 0,
+          "6": 190
+        }
+      },
+      {
+        "session": 3,
+        "scope": "workload",
+        "tokens": 693840,
+        "top_k_sum": 2370567,
+        "avg_top_k": 3.4165902801798684,
+        "histogram": {
+          "1": 0,
+          "2": 0,
+          "3": 597491,
+          "4": 0,
+          "5": 0,
+          "6": 96349
+        }
+      },
+      {
+        "session": 4,
+        "scope": "workload",
+        "tokens": 1792,
+        "top_k_sum": 6174,
+        "avg_top_k": 3.4453125,
+        "histogram": {
+          "1": 0,
+          "2": 0,
+          "3": 1526,
+          "4": 0,
+          "5": 0,
+          "6": 266
+        }
+      },
+      {
+        "session": 5,
+        "scope": "workload",
+        "tokens": 64792,
+        "top_k_sum": 222924,
+        "avg_top_k": 3.440609951845907,
+        "histogram": {
+          "1": 0,
+          "2": 0,
+          "3": 55276,
+          "4": 0,
+          "5": 0,
+          "6": 9516
+        }
+      }
+    ]
+  },
+  "compiler_cache": {
+    "before_variants": 138,
+    "after_variants": 138,
+    "created_or_changed": []
+  },
+  "occupancy": {
+    "samples_during_workloads": 27,
+    "foreign_samples_during_workloads": [
+      {
+        "at_unix": 1792635177.357402,
+        "phase": "run_e2e384.sh",
+        "foreign": [
+          {
+            "board": 0,
+            "host_pid": 3841448,
+            "process": "sglang::schedul",
+            "our_container": false
+          }
+        ],
+        "records": [
+          {
+            "board": 0,
+            "output": "\tNPU ID                         : 0\n\tChip Count                     : 2\n\n\tProcess id:3841448 Process name:sglangschedul     Process memory(MB):118\n\tProcess id:3579507 Process name:VLLMWorker_TP     Process memory(MB):55745\n\tChip ID                        : 0\n\n\tProcess id:3582957 Process name:VLLMWorker_TP     Process memory(MB):55746\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3841448,
+                "process": "sglang::schedul",
+                "our_container": false
+              },
+              {
+                "host_pid": 3579507,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3582957,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 3,
+            "output": "\tNPU ID                         : 3\n\tChip Count                     : 2\n\n\tProcess id:3586365 Process name:VLLMWorker_TP     Process memory(MB):55751\n\tChip ID                        : 0\n\n\tProcess id:3590594 Process name:VLLMWorker_TP     Process memory(MB):55755\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3586365,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3590594,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 4,
+            "output": "\tNPU ID                         : 4\n\tChip Count                     : 2\n\n\tProcess id:3595514 Process name:VLLMWorker_TP     Process memory(MB):55751\n\tChip ID                        : 0\n\n\tProcess id:3598415 Process name:VLLMWorker_TP     Process memory(MB):55751\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3595514,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3598415,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 5,
+            "output": "\tNPU ID                         : 5\n\tChip Count                     : 2\n\n\tProcess id:3602113 Process name:VLLMWorker_TP     Process memory(MB):55751\n\tChip ID                        : 0\n\n\tProcess id:3606141 Process name:VLLMWorker_TP     Process memory(MB):55753\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3602113,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3606141,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "at_unix": 1792635193.0172687,
+        "phase": "run_e2e384.sh",
+        "foreign": [
+          {
+            "board": 0,
+            "host_pid": 3841448,
+            "process": "sglang::schedul",
+            "our_container": false
+          }
+        ],
+        "records": [
+          {
+            "board": 0,
+            "output": "\tNPU ID                         : 0\n\tChip Count                     : 2\n\n\tProcess id:3841448 Process name:sglangschedul     Process memory(MB):118\n\tProcess id:3579507 Process name:VLLMWorker_TP     Process memory(MB):55748\n\tChip ID                        : 0\n\n\tProcess id:3582957 Process name:VLLMWorker_TP     Process memory(MB):55748\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3841448,
+                "process": "sglang::schedul",
+                "our_container": false
+              },
+              {
+                "host_pid": 3579507,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3582957,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 3,
+            "output": "\tNPU ID                         : 3\n\tChip Count                     : 2\n\n\tProcess id:3586365 Process name:VLLMWorker_TP     Process memory(MB):55754\n\tChip ID                        : 0\n\n\tProcess id:3590594 Process name:VLLMWorker_TP     Process memory(MB):55758\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3586365,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3590594,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 4,
+            "output": "\tNPU ID                         : 4\n\tChip Count                     : 2\n\n\tProcess id:3595514 Process name:VLLMWorker_TP     Process memory(MB):55754\n\tChip ID                        : 0\n\n\tProcess id:3598415 Process name:VLLMWorker_TP     Process memory(MB):55754\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3595514,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3598415,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 5,
+            "output": "\tNPU ID                         : 5\n\tChip Count                     : 2\n\n\tProcess id:3602113 Process name:VLLMWorker_TP     Process memory(MB):55754\n\tChip ID                        : 0\n\n\tProcess id:3606141 Process name:VLLMWorker_TP     Process memory(MB):55756\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3602113,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3606141,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "at_unix": 1792635208.674641,
+        "phase": "run_e2e384.sh",
+        "foreign": [
+          {
+            "board": 0,
+            "host_pid": 3841448,
+            "process": "sglang::schedul",
+            "our_container": false
+          }
+        ],
+        "records": [
+          {
+            "board": 0,
+            "output": "\tNPU ID                         : 0\n\tChip Count                     : 2\n\n\tProcess id:3841448 Process name:sglangschedul     Process memory(MB):128\n\tProcess id:3579507 Process name:VLLMWorker_TP     Process memory(MB):55749\n\tChip ID                        : 0\n\n\tProcess id:3582957 Process name:VLLMWorker_TP     Process memory(MB):55748\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3841448,
+                "process": "sglang::schedul",
+                "our_container": false
+              },
+              {
+                "host_pid": 3579507,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3582957,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 3,
+            "output": "\tNPU ID                         : 3\n\tChip Count                     : 2\n\n\tProcess id:3586365 Process name:VLLMWorker_TP     Process memory(MB):55754\n\tChip ID                        : 0\n\n\tProcess id:3590594 Process name:VLLMWorker_TP     Process memory(MB):55758\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3586365,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3590594,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 4,
+            "output": "\tNPU ID                         : 4\n\tChip Count                     : 2\n\n\tProcess id:3595514 Process name:VLLMWorker_TP     Process memory(MB):55754\n\tChip ID                        : 0\n\n\tProcess id:3598415 Process name:VLLMWorker_TP     Process memory(MB):55754\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3595514,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3598415,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 5,
+            "output": "\tNPU ID                         : 5\n\tChip Count                     : 2\n\n\tProcess id:3602113 Process name:VLLMWorker_TP     Process memory(MB):55754\n\tChip ID                        : 0\n\n\tProcess id:3606141 Process name:VLLMWorker_TP     Process memory(MB):55756\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3602113,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3606141,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "at_unix": 1792635224.3431594,
+        "phase": "run_e2e384.sh",
+        "foreign": [
+          {
+            "board": 0,
+            "host_pid": 3841448,
+            "process": "sglang::schedul",
+            "our_container": false
+          }
+        ],
+        "records": [
+          {
+            "board": 0,
+            "output": "\tNPU ID                         : 0\n\tChip Count                     : 2\n\n\tProcess id:3841448 Process name:sglangschedul     Process memory(MB):128\n\tProcess id:3579507 Process name:VLLMWorker_TP     Process memory(MB):55749\n\tChip ID                        : 0\n\n\tProcess id:3582957 Process name:VLLMWorker_TP     Process memory(MB):55749\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3841448,
+                "process": "sglang::schedul",
+                "our_container": false
+              },
+              {
+                "host_pid": 3579507,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3582957,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 3,
+            "output": "\tNPU ID                         : 3\n\tChip Count                     : 2\n\n\tProcess id:3586365 Process name:VLLMWorker_TP     Process memory(MB):55755\n\tChip ID                        : 0\n\n\tProcess id:3590594 Process name:VLLMWorker_TP     Process memory(MB):55759\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3586365,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3590594,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 4,
+            "output": "\tNPU ID                         : 4\n\tChip Count                     : 2\n\n\tProcess id:3595514 Process name:VLLMWorker_TP     Process memory(MB):55755\n\tChip ID                        : 0\n\n\tProcess id:3598415 Process name:VLLMWorker_TP     Process memory(MB):55755\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3595514,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3598415,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 5,
+            "output": "\tNPU ID                         : 5\n\tChip Count                     : 2\n\n\tProcess id:3602113 Process name:VLLMWorker_TP     Process memory(MB):55755\n\tChip ID                        : 0\n\n\tProcess id:3606141 Process name:VLLMWorker_TP     Process memory(MB):55757\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3602113,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3606141,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "at_unix": 1792635240.0121484,
+        "phase": "run_e2e384.sh",
+        "foreign": [
+          {
+            "board": 0,
+            "host_pid": 3841448,
+            "process": "sglang::schedul",
+            "our_container": false
+          }
+        ],
+        "records": [
+          {
+            "board": 0,
+            "output": "\tNPU ID                         : 0\n\tChip Count                     : 2\n\n\tProcess id:3841448 Process name:sglangschedul     Process memory(MB):128\n\tProcess id:3579507 Process name:VLLMWorker_TP     Process memory(MB):55750\n\tChip ID                        : 0\n\n\tProcess id:3582957 Process name:VLLMWorker_TP     Process memory(MB):55750\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3841448,
+                "process": "sglang::schedul",
+                "our_container": false
+              },
+              {
+                "host_pid": 3579507,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3582957,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 3,
+            "output": "\tNPU ID                         : 3\n\tChip Count                     : 2\n\n\tProcess id:3586365 Process name:VLLMWorker_TP     Process memory(MB):55755\n\tChip ID                        : 0\n\n\tProcess id:3590594 Process name:VLLMWorker_TP     Process memory(MB):55759\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3586365,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3590594,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 4,
+            "output": "\tNPU ID                         : 4\n\tChip Count                     : 2\n\n\tProcess id:3595514 Process name:VLLMWorker_TP     Process memory(MB):55755\n\tChip ID                        : 0\n\n\tProcess id:3598415 Process name:VLLMWorker_TP     Process memory(MB):55756\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3595514,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3598415,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 5,
+            "output": "\tNPU ID                         : 5\n\tChip Count                     : 2\n\n\tProcess id:3602113 Process name:VLLMWorker_TP     Process memory(MB):55756\n\tChip ID                        : 0\n\n\tProcess id:3606141 Process name:VLLMWorker_TP     Process memory(MB):55757\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3602113,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3606141,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "at_unix": 1792635255.6799068,
+        "phase": "run_e2e384.sh",
+        "foreign": [
+          {
+            "board": 0,
+            "host_pid": 3841448,
+            "process": "sglang::schedul",
+            "our_container": false
+          }
+        ],
+        "records": [
+          {
+            "board": 0,
+            "output": "\tNPU ID                         : 0\n\tChip Count                     : 2\n\n\tProcess id:3841448 Process name:sglangschedul     Process memory(MB):128\n\tProcess id:3579507 Process name:VLLMWorker_TP     Process memory(MB):55750\n\tChip ID                        : 0\n\n\tProcess id:3582957 Process name:VLLMWorker_TP     Process memory(MB):55750\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3841448,
+                "process": "sglang::schedul",
+                "our_container": false
+              },
+              {
+                "host_pid": 3579507,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3582957,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 3,
+            "output": "\tNPU ID                         : 3\n\tChip Count                     : 2\n\n\tProcess id:3586365 Process name:VLLMWorker_TP     Process memory(MB):55756\n\tChip ID                        : 0\n\n\tProcess id:3590594 Process name:VLLMWorker_TP     Process memory(MB):55760\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3586365,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3590594,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 4,
+            "output": "\tNPU ID                         : 4\n\tChip Count                     : 2\n\n\tProcess id:3595514 Process name:VLLMWorker_TP     Process memory(MB):55756\n\tChip ID                        : 0\n\n\tProcess id:3598415 Process name:VLLMWorker_TP     Process memory(MB):55756\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3595514,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3598415,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 5,
+            "output": "\tNPU ID                         : 5\n\tChip Count                     : 2\n\n\tProcess id:3602113 Process name:VLLMWorker_TP     Process memory(MB):55756\n\tChip ID                        : 0\n\n\tProcess id:3606141 Process name:VLLMWorker_TP     Process memory(MB):55758\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3602113,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3606141,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "at_unix": 1792635271.3530314,
+        "phase": "run_e2e384.sh",
+        "foreign": [
+          {
+            "board": 0,
+            "host_pid": 3841448,
+            "process": "sglang::schedul",
+            "our_container": false
+          }
+        ],
+        "records": [
+          {
+            "board": 0,
+            "output": "\tNPU ID                         : 0\n\tChip Count                     : 2\n\n\tProcess id:3841448 Process name:sglangschedul     Process memory(MB):128\n\tProcess id:3579507 Process name:VLLMWorker_TP     Process memory(MB):55751\n\tChip ID                        : 0\n\n\tProcess id:3582957 Process name:VLLMWorker_TP     Process memory(MB):55751\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3841448,
+                "process": "sglang::schedul",
+                "our_container": false
+              },
+              {
+                "host_pid": 3579507,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3582957,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 3,
+            "output": "\tNPU ID                         : 3\n\tChip Count                     : 2\n\n\tProcess id:3586365 Process name:VLLMWorker_TP     Process memory(MB):55756\n\tChip ID                        : 0\n\n\tProcess id:3590594 Process name:VLLMWorker_TP     Process memory(MB):55760\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3586365,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3590594,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 4,
+            "output": "\tNPU ID                         : 4\n\tChip Count                     : 2\n\n\tProcess id:3595514 Process name:VLLMWorker_TP     Process memory(MB):55756\n\tChip ID                        : 0\n\n\tProcess id:3598415 Process name:VLLMWorker_TP     Process memory(MB):55756\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3595514,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3598415,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 5,
+            "output": "\tNPU ID                         : 5\n\tChip Count                     : 2\n\n\tProcess id:3602113 Process name:VLLMWorker_TP     Process memory(MB):55756\n\tChip ID                        : 0\n\n\tProcess id:3606141 Process name:VLLMWorker_TP     Process memory(MB):55758\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3602113,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3606141,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "at_unix": 1792635287.0211112,
+        "phase": "run_e2e384.sh",
+        "foreign": [
+          {
+            "board": 0,
+            "host_pid": 3841448,
+            "process": "sglang::schedul",
+            "our_container": false
+          }
+        ],
+        "records": [
+          {
+            "board": 0,
+            "output": "\tNPU ID                         : 0\n\tChip Count                     : 2\n\n\tProcess id:3841448 Process name:sglangschedul     Process memory(MB):128\n\tProcess id:3579507 Process name:VLLMWorker_TP     Process memory(MB):55751\n\tChip ID                        : 0\n\n\tProcess id:3582957 Process name:VLLMWorker_TP     Process memory(MB):55751\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3841448,
+                "process": "sglang::schedul",
+                "our_container": false
+              },
+              {
+                "host_pid": 3579507,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3582957,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 3,
+            "output": "\tNPU ID                         : 3\n\tChip Count                     : 2\n\n\tProcess id:3586365 Process name:VLLMWorker_TP     Process memory(MB):55756\n\tChip ID                        : 0\n\n\tProcess id:3590594 Process name:VLLMWorker_TP     Process memory(MB):55760\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3586365,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3590594,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 4,
+            "output": "\tNPU ID                         : 4\n\tChip Count                     : 2\n\n\tProcess id:3595514 Process name:VLLMWorker_TP     Process memory(MB):55756\n\tChip ID                        : 0\n\n\tProcess id:3598415 Process name:VLLMWorker_TP     Process memory(MB):55757\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3595514,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3598415,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 5,
+            "output": "\tNPU ID                         : 5\n\tChip Count                     : 2\n\n\tProcess id:3602113 Process name:VLLMWorker_TP     Process memory(MB):55756\n\tChip ID                        : 0\n\n\tProcess id:3606141 Process name:VLLMWorker_TP     Process memory(MB):55758\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3602113,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3606141,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "at_unix": 1792635459.3479922,
+        "phase": "run_profile.sh",
+        "foreign": [
+          {
+            "board": 0,
+            "host_pid": 3883228,
+            "process": "sglang::schedul",
+            "our_container": false
+          }
+        ],
+        "records": [
+          {
+            "board": 0,
+            "output": "\tNPU ID                         : 0\n\tChip Count                     : 2\n\n\tProcess id:3883228 Process name:sglangschedul     Process memory(MB):118\n\tProcess id:3579507 Process name:VLLMWorker_TP     Process memory(MB):55760\n\tChip ID                        : 0\n\n\tProcess id:3582957 Process name:VLLMWorker_TP     Process memory(MB):55759\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3883228,
+                "process": "sglang::schedul",
+                "our_container": false
+              },
+              {
+                "host_pid": 3579507,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3582957,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 3,
+            "output": "\tNPU ID                         : 3\n\tChip Count                     : 2\n\n\tProcess id:3586365 Process name:VLLMWorker_TP     Process memory(MB):55765\n\tChip ID                        : 0\n\n\tProcess id:3590594 Process name:VLLMWorker_TP     Process memory(MB):55769\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3586365,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3590594,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 4,
+            "output": "\tNPU ID                         : 4\n\tChip Count                     : 2\n\n\tProcess id:3595514 Process name:VLLMWorker_TP     Process memory(MB):55765\n\tChip ID                        : 0\n\n\tProcess id:3598415 Process name:VLLMWorker_TP     Process memory(MB):55765\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3595514,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3598415,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 5,
+            "output": "\tNPU ID                         : 5\n\tChip Count                     : 2\n\n\tProcess id:3602113 Process name:VLLMWorker_TP     Process memory(MB):55765\n\tChip ID                        : 0\n\n\tProcess id:3606141 Process name:VLLMWorker_TP     Process memory(MB):55767\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3602113,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3606141,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "at_unix": 1792635475.0109377,
+        "phase": "run_profile.sh",
+        "foreign": [
+          {
+            "board": 0,
+            "host_pid": 3883228,
+            "process": "sglang::schedul",
+            "our_container": false
+          }
+        ],
+        "records": [
+          {
+            "board": 0,
+            "output": "\tNPU ID                         : 0\n\tChip Count                     : 2\n\n\tProcess id:3883228 Process name:sglangschedul     Process memory(MB):128\n\tProcess id:3579507 Process name:VLLMWorker_TP     Process memory(MB):55760\n\tChip ID                        : 0\n\n\tProcess id:3582957 Process name:VLLMWorker_TP     Process memory(MB):55759\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3883228,
+                "process": "sglang::schedul",
+                "our_container": false
+              },
+              {
+                "host_pid": 3579507,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3582957,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 3,
+            "output": "\tNPU ID                         : 3\n\tChip Count                     : 2\n\n\tProcess id:3586365 Process name:VLLMWorker_TP     Process memory(MB):55765\n\tChip ID                        : 0\n\n\tProcess id:3590594 Process name:VLLMWorker_TP     Process memory(MB):55769\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3586365,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3590594,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 4,
+            "output": "\tNPU ID                         : 4\n\tChip Count                     : 2\n\n\tProcess id:3595514 Process name:VLLMWorker_TP     Process memory(MB):55765\n\tChip ID                        : 0\n\n\tProcess id:3598415 Process name:VLLMWorker_TP     Process memory(MB):55765\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3595514,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3598415,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 5,
+            "output": "\tNPU ID                         : 5\n\tChip Count                     : 2\n\n\tProcess id:3602113 Process name:VLLMWorker_TP     Process memory(MB):55765\n\tChip ID                        : 0\n\n\tProcess id:3606141 Process name:VLLMWorker_TP     Process memory(MB):55767\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3602113,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3606141,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "at_unix": 1792635490.673037,
+        "phase": "run_profile.sh",
+        "foreign": [
+          {
+            "board": 0,
+            "host_pid": 3883228,
+            "process": "sglang::schedul",
+            "our_container": false
+          }
+        ],
+        "records": [
+          {
+            "board": 0,
+            "output": "\tNPU ID                         : 0\n\tChip Count                     : 2\n\n\tProcess id:3883228 Process name:sglangschedul     Process memory(MB):128\n\tProcess id:3579507 Process name:VLLMWorker_TP     Process memory(MB):55760\n\tChip ID                        : 0\n\n\tProcess id:3582957 Process name:VLLMWorker_TP     Process memory(MB):55759\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3883228,
+                "process": "sglang::schedul",
+                "our_container": false
+              },
+              {
+                "host_pid": 3579507,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3582957,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 3,
+            "output": "\tNPU ID                         : 3\n\tChip Count                     : 2\n\n\tProcess id:3586365 Process name:VLLMWorker_TP     Process memory(MB):55765\n\tChip ID                        : 0\n\n\tProcess id:3590594 Process name:VLLMWorker_TP     Process memory(MB):55769\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3586365,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3590594,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 4,
+            "output": "\tNPU ID                         : 4\n\tChip Count                     : 2\n\n\tProcess id:3595514 Process name:VLLMWorker_TP     Process memory(MB):55765\n\tChip ID                        : 0\n\n\tProcess id:3598415 Process name:VLLMWorker_TP     Process memory(MB):55765\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3595514,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3598415,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 5,
+            "output": "\tNPU ID                         : 5\n\tChip Count                     : 2\n\n\tProcess id:3602113 Process name:VLLMWorker_TP     Process memory(MB):55765\n\tChip ID                        : 0\n\n\tProcess id:3606141 Process name:VLLMWorker_TP     Process memory(MB):55767\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3602113,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3606141,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "at_unix": 1792635506.3530173,
+        "phase": "run_profile.sh",
+        "foreign": [
+          {
+            "board": 0,
+            "host_pid": 3883228,
+            "process": "sglang::schedul",
+            "our_container": false
+          }
+        ],
+        "records": [
+          {
+            "board": 0,
+            "output": "\tNPU ID                         : 0\n\tChip Count                     : 2\n\n\tProcess id:3883228 Process name:sglangschedul     Process memory(MB):128\n\tProcess id:3579507 Process name:VLLMWorker_TP     Process memory(MB):55764\n\tChip ID                        : 0\n\n\tProcess id:3582957 Process name:VLLMWorker_TP     Process memory(MB):55764\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3883228,
+                "process": "sglang::schedul",
+                "our_container": false
+              },
+              {
+                "host_pid": 3579507,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3582957,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 3,
+            "output": "\tNPU ID                         : 3\n\tChip Count                     : 2\n\n\tProcess id:3586365 Process name:VLLMWorker_TP     Process memory(MB):55770\n\tChip ID                        : 0\n\n\tProcess id:3590594 Process name:VLLMWorker_TP     Process memory(MB):55774\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3586365,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3590594,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 4,
+            "output": "\tNPU ID                         : 4\n\tChip Count                     : 2\n\n\tProcess id:3595514 Process name:VLLMWorker_TP     Process memory(MB):55770\n\tChip ID                        : 0\n\n\tProcess id:3598415 Process name:VLLMWorker_TP     Process memory(MB):55770\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3595514,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3598415,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 5,
+            "output": "\tNPU ID                         : 5\n\tChip Count                     : 2\n\n\tProcess id:3602113 Process name:VLLMWorker_TP     Process memory(MB):55770\n\tChip ID                        : 0\n\n\tProcess id:3606141 Process name:VLLMWorker_TP     Process memory(MB):55772\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3602113,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3606141,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "at_unix": 1792635521.9924335,
+        "phase": "run_profile.sh",
+        "foreign": [
+          {
+            "board": 0,
+            "host_pid": 3883228,
+            "process": "sglang::schedul",
+            "our_container": false
+          }
+        ],
+        "records": [
+          {
+            "board": 0,
+            "output": "\tNPU ID                         : 0\n\tChip Count                     : 2\n\n\tProcess id:3883228 Process name:sglangschedul     Process memory(MB):128\n\tProcess id:3579507 Process name:VLLMWorker_TP     Process memory(MB):55764\n\tChip ID                        : 0\n\n\tProcess id:3582957 Process name:VLLMWorker_TP     Process memory(MB):55764\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3883228,
+                "process": "sglang::schedul",
+                "our_container": false
+              },
+              {
+                "host_pid": 3579507,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3582957,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 3,
+            "output": "\tNPU ID                         : 3\n\tChip Count                     : 2\n\n\tProcess id:3586365 Process name:VLLMWorker_TP     Process memory(MB):55770\n\tChip ID                        : 0\n\n\tProcess id:3590594 Process name:VLLMWorker_TP     Process memory(MB):55774\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3586365,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3590594,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 4,
+            "output": "\tNPU ID                         : 4\n\tChip Count                     : 2\n\n\tProcess id:3595514 Process name:VLLMWorker_TP     Process memory(MB):55770\n\tChip ID                        : 0\n\n\tProcess id:3598415 Process name:VLLMWorker_TP     Process memory(MB):55770\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3595514,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3598415,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          },
+          {
+            "board": 5,
+            "output": "\tNPU ID                         : 5\n\tChip Count                     : 2\n\n\tProcess id:3602113 Process name:VLLMWorker_TP     Process memory(MB):55770\n\tChip ID                        : 0\n\n\tProcess id:3606141 Process name:VLLMWorker_TP     Process memory(MB):55772\n\tChip ID                        : 1\n\n",
+            "exit_code": 0,
+            "processes": [
+              {
+                "host_pid": 3602113,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              },
+              {
+                "host_pid": 3606141,
+                "process": "VLLM::Worker_TP",
+                "our_container": true
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

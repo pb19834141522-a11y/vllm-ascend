@@ -248,12 +248,13 @@ KernelMoeTokenUnpermute<T1, T2, T3, PROBS>::CalPartOutToken(const int64_t start_
     int64_t end_token = start_token + this->top_k;
     T2 cal_token_idx = this->indicesLocal.GetValue(start_token);
 
-    // Handle the first token
-    if (cal_token_idx < this->num_out_tokens) {
-        float probsValue = 0;
-        if constexpr (PROBS) {
-            probsValue = this->probs_tensor.GetValue(start_token);
-        }
+    // Spec-K routes in the reserved expert bucket have no returned payload.
+    // Skip them BEFORE the read: multiplying stale/NaN data by zero is unsafe.
+    float probsValue = 1.0f;
+    if constexpr (PROBS) {
+        probsValue = this->probs_tensor.GetValue(start_token);
+    }
+    if (cal_token_idx >= 0 && cal_token_idx < this->num_out_tokens && probsValue != 0.0f) {
 
         CopyTokenIn(cal_token_idx, h_index, h_length);
         PipeBarrier<PIPE_V>();
@@ -266,11 +267,11 @@ KernelMoeTokenUnpermute<T1, T2, T3, PROBS>::CalPartOutToken(const int64_t start_
     // Handle the remaining tokens
     for (int64_t token_index = start_token + 1; token_index < end_token; ++token_index) {
         cal_token_idx = this->indicesLocal.GetValue(token_index);
-        if (cal_token_idx < this->num_out_tokens) {
-            float probsValue = 0;
-            if constexpr (PROBS) {
-                probsValue = this->probs_tensor.GetValue(token_index);
-            }
+        float probsValue = 1.0f;
+        if constexpr (PROBS) {
+            probsValue = this->probs_tensor.GetValue(token_index);
+        }
+        if (cal_token_idx >= 0 && cal_token_idx < this->num_out_tokens && probsValue != 0.0f) {
         
             CopyTokenIn(cal_token_idx, h_index, h_length);
             PipeBarrier<PIPE_V>();

@@ -129,6 +129,7 @@ def set_ascend_forward_context(
     device_metadata_executor=None,
     has_sinks=False,
     eplb_heat_collection_status: bool = False,
+    token_top_ks: torch.Tensor | None = None,
 ):
     """A context manager that stores the current forward context,
     can be attention metadata, etc.
@@ -212,6 +213,7 @@ def set_ascend_forward_context(
         forward_context.prefetch_mlp_down_proj = False
         forward_context.model_instance = model_instance
         forward_context.is_draft_model = is_draft_model
+        forward_context.token_top_ks = None if is_draft_model else token_top_ks
         forward_context.is_draft_model_prefill = False
 
         if num_tokens is None and attn_metadata is not None:
@@ -455,6 +457,7 @@ class _ExtraForwardContextProxy:
         "num_tokens_across_dp",
         "mc2_mask",
         "is_draft_model",
+        "token_top_ks",
         "is_draft_model_prefill",
         "draft_moe_quant_type",
         "prefetch_mlp_gate_up_proj",

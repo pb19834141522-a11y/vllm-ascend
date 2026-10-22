@@ -1602,6 +1602,12 @@ class AscendSpecDecodeBaseProposer(SpecDecodeBaseProposer):
                     # [num_blk * K, V] to match early_exit view logic.
                     draft_probs_step0 = torch.stack(dspark_probs_list, dim=1).view(-1, logits.shape[-1]).contiguous()
 
+                spec_k_policy = getattr(self, "spec_k_policy", None)
+                if spec_k_policy is not None:
+                    # Match the original policy: confidence is the entropy of
+                    # the logits AFTER autoregressive Markov bias correction.
+                    self._last_spec_k_budgets = spec_k_policy.top_ks_from_logits(logits)
+
                 # Dynamic verify-length path, implemented in DynamicSpecScheduler
                 # Only the dspark method is handled here since it relies on
                 # the DSpark confidence head.

@@ -425,6 +425,9 @@ class NPUWorker(WorkerBase):
             weight_transfer_engine.shutdown()
 
         if model_runner := getattr(self, "model_runner", None):
+            spec_k_state = getattr(model_runner, "_spec_k_state", None)
+            if spec_k_state is not None and spec_k_state.stats is not None:
+                spec_k_state.stats.close()
             shutdown_fn = getattr(model_runner, "shutdown", None)
             if callable(shutdown_fn):
                 shutdown_fn()
@@ -847,6 +850,10 @@ class NPUWorker(WorkerBase):
 
         if self.profiler is not None:
             self.profiler.step()
+
+        spec_k_state = getattr(self.model_runner, "_spec_k_state", None)
+        if spec_k_state is not None and spec_k_state.stats is not None:
+            spec_k_state.stats.set_profile_active(self.profiler is not None and self.profiler.is_running)
 
         output = self.model_runner.execute_model(scheduler_output, intermediate_tensors)
         if self.use_v2_model_runner and self.model_runner.is_pooling_model and output is None:
@@ -1302,6 +1309,10 @@ class NPUWorker(WorkerBase):
                 logger.warning("Profiler was not started, nothing to stop.")
                 return
             self.profiler.stop()
+            spec_k_state = getattr(self.model_runner, "_spec_k_state", None)
+            if spec_k_state is not None and spec_k_state.stats is not None:
+                spec_k_state.stats.set_profile_active(False)
+                spec_k_state.stats.flush("stop_profile")
 
     def add_lora(self, lora_request: LoRARequest) -> bool:
         return self.model_runner.add_lora(lora_request)
