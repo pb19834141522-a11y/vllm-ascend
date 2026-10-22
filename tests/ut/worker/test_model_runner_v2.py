@@ -1955,3 +1955,81 @@ def test_device_only_cpu_lengths_remain_upper_bounds_without_event_wait():
     for i, req_id in enumerate(batch.req_ids):
         index = runner.req_states.req_id_to_index[req_id]
         assert runner.input_buffers.seq_lens_cpu[i] == before[index] + output.num_scheduled_tokens[req_id]
+
+
+@pytest.mark.parametrize(
+    "dummy,profile,fail", [(False, False, False), (True, False, False), (False, True, False), (False, False, True)]
+)
+def test_spec_k_target_budget_scope_lifecycle_and_stats(monkeypatch, dummy, profile, fail):
+    from vllm_ascend.ascend_forward_context import get_mrv2_token_top_ks
+
+    runner = _make_runner(need_timing=False)
+    state = SimpleNamespace(
+        input_top_ks=torch.full((16,), 3, dtype=torch.int32),
+        policy=SimpleNamespace(base_top_k=6),
+        stats=Mock(),
+        release=Mock(),
+        invalidate_drafts=Mock(),
+    )
+    runner._spec_k_state = state
+    output = SimpleNamespace(
+        total_num_scheduled_tokens=8,
+        num_scheduled_tokens={"a": 8},
+        finished_req_ids={"done"},
+        preempted_req_ids={"paused"},
+    )
+    module = "vllm_ascend.worker.v2.model_runner."
+    monkeypatch.setattr(module + "has_kv_transfer_group", lambda: False)
+    monkeypatch.setattr(module + "should_skip_allreduce_across_dp_group", lambda _: False)
+    monkeypatch.setattr(runner, "_maybe_send_draft_kv", Mock())
+
+    def forward(_self, *args, **kwargs):
+        budgets = get_mrv2_token_top_ks(8)
+        if dummy or profile:
+            assert budgets is None
+        else:
+            assert budgets.data_ptr() == state.input_top_ks.data_ptr()
+        if fail:
+            raise RuntimeError("forward failed")
+        return None
+
+    monkeypatch.setattr(GPUModelRunner, "execute_model", forward)
+    if fail:
+        with pytest.raises(RuntimeError, match="forward failed"):
+            runner.execute_model(output, dummy_run=dummy, is_profile=profile)
+    else:
+        runner.execute_model(output, dummy_run=dummy, is_profile=profile)
+    assert get_mrv2_token_top_ks(8) is None
+    if dummy:
+        assert torch.all(state.input_top_ks == 6)
+        state.release.assert_not_called()
+    else:
+        state.release.assert_called_once_with({"done"})
+        state.invalidate_drafts.assert_called_once_with({"paused"})
+    if not dummy and not profile and not fail:
+        state.stats.complete_step.assert_called_once()
+    else:
+        state.stats.complete_step.assert_not_called()
+
+
+def test_spec_k_capture_uses_same_target_buffer_as_replay(monkeypatch):
+    from vllm_ascend.ascend_forward_context import get_mrv2_token_top_ks
+
+    runner = _make_runner(need_timing=False)
+    runner.model_state.supports_mm_inputs = False
+    runner._spec_k_state = SimpleNamespace(
+        input_top_ks=torch.full((16,), 3, dtype=torch.int32), policy=SimpleNamespace(base_top_k=6)
+    )
+    module = "vllm_ascend.worker.v2.model_runner."
+    monkeypatch.setattr(module + "torch_cuda_wrapper", nullcontext)
+    monkeypatch.setattr(module + "communicator_switch", nullcontext)
+
+    def capture(self, *, profile_only=False):
+        budgets = get_mrv2_token_top_ks(8)
+        assert budgets.data_ptr() == self._spec_k_state.input_top_ks.data_ptr()
+        assert torch.all(budgets == 6)
+        return 123
+
+    monkeypatch.setattr(GPUModelRunner, "capture_model", capture)
+    assert runner.capture_model() == 123
+    assert get_mrv2_token_top_ks(8) is None

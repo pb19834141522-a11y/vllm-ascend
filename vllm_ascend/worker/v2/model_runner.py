@@ -21,6 +21,7 @@ import inspect
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from copy import deepcopy
 from dataclasses import replace
+from functools import partial
 from typing import Any
 
 import numpy as np
@@ -28,12 +29,14 @@ import torch
 from vllm.compilation import breakable_cudagraph
 from vllm.config import VllmConfig
 from vllm.config.compilation import CompilationMode, CUDAGraphMode
+from vllm.distributed import get_tensor_model_parallel_rank
 from vllm.distributed.kv_transfer import get_kv_transfer_group, has_kv_transfer_group
 from vllm.logger import logger
 from vllm.sequence import IntermediateTensors
 from vllm.utils.torch_utils import async_tensor_h2d as async_copy_to_gpu
 from vllm.v1.core.sched.output import SchedulerOutput
 from vllm.v1.kv_cache_interface import KVCacheConfig, KVCacheSpec
+from vllm.v1.utils import CpuGpuBuffer
 from vllm.v1.worker.dp_utils import skip_dp_coordination
 from vllm.v1.worker.gpu import model_runner as vllm_model_runner
 from vllm.v1.worker.gpu.cudagraph_utils import BatchExecutionDescriptor
@@ -57,6 +60,7 @@ from vllm_ascend.ascend_forward_context import (
     MoECommType,
     get_mc2_tokens_capacity,
     override_mrv2_in_profile_run,
+    override_mrv2_token_top_ks,
     select_moe_comm_method,
     set_mc2_mask,
     set_mc2_tokens_capacity,
@@ -98,6 +102,7 @@ from vllm_ascend.observability.runtime_guard.hooks import (
 )
 from vllm_ascend.observability.runtime_guard.processor import RuntimeGuardProcessor
 from vllm_ascend.ops.rotary_embedding import set_cos_and_sin, update_cos_sin
+from vllm_ascend.spec_k import SpecKBudgetState
 from vllm_ascend.utils import (
     is_c8_mxfp_kv_quant,
     is_deepseek_v41,
@@ -239,6 +244,7 @@ class NPUModelRunner(GPUModelRunner):
             max_num_tokens=self.max_num_tokens,
             device=self.device,
         )
+        self._init_spec_k()
 
         # Pinned D2H staging for corrected device state after spec rejection.
         # The authoritative host state is the shared NumPy/torch RequestState view.
@@ -281,6 +287,24 @@ class NPUModelRunner(GPUModelRunner):
 
                 self.debugger = AclGraphDumper(dump_cfg)
         self.runtime_guard = RuntimeGuardProcessor.bind(self)
+
+    def _init_spec_k(self) -> None:
+        self._spec_k_state = None
+        config = getattr(self.ascend_config, "spec_k_config", None)
+        if config is None or config.enabled is not True:
+            return
+        self._spec_k_state = SpecKBudgetState(
+            self.speculator.spec_k_policy,
+            self.max_num_reqs,
+            self.max_model_len,
+            self.max_num_tokens,
+            # copy_to_gpu pins a fresh snapshot of this pageable CPU source;
+            # the next async scheduler step may safely rewrite the source.
+            partial(CpuGpuBuffer, device=self.device, pin_memory=False),
+            log_stats_interval=config.log_stats_interval if get_tensor_model_parallel_rank() == 0 else 0,
+            dp_rank=self.dp_rank,
+        )
+        self.speculator.spec_k_target = self._spec_k_state
 
     @property
     def pcp_manager_cls(self) -> type[AscendPCPManager]:
@@ -587,6 +611,10 @@ class NPUModelRunner(GPUModelRunner):
     @torch.inference_mode()
     def capture_model(self, *, profile_only: bool = False) -> int:
         """Capture decoder and multimodal encoder graphs on Ascend."""
+        spec_k_state = getattr(self, "_spec_k_state", None)
+        budgets = None if spec_k_state is None else spec_k_state.input_top_ks
+        if budgets is not None:
+            budgets.fill_(spec_k_state.policy.base_top_k)
         if hasattr(self, "model_state") and self.model_state.supports_mm_inputs:
             encoder_runner = getattr(self.model_state, "encoder_runner", None)
             encoder_manager = getattr(encoder_runner, "cudagraph_manager", None)
@@ -596,7 +624,7 @@ class NPUModelRunner(GPUModelRunner):
         # EncoderRunner uses vLLM's generic graph_capture(), whose communicator
         # type check expects the CUDA symbol. Temporarily bind that symbol to
         # NPUCommunicator, as is already done for decoder ACL graph capture.
-        with torch_cuda_wrapper(), communicator_switch():
+        with torch_cuda_wrapper(), communicator_switch(), override_mrv2_token_top_ks(budgets):
             if "profile_only" not in inspect.signature(GPUModelRunner.capture_model).parameters:
                 if profile_only:
                     raise NotImplementedError("Graph memory profiling is unavailable in this vLLM version.")
@@ -619,6 +647,18 @@ class NPUModelRunner(GPUModelRunner):
         randomize_inputs: bool = False,
     ):
         self._cpp_execution_time_ms = None
+        spec_k_state = getattr(self, "_spec_k_state", None)
+        budgets = None
+        if spec_k_state is not None:
+            if dummy_run:
+                # Idle DP replays must not consume stale real-request budgets.
+                # The captured graph already holds this fixed buffer address.
+                spec_k_state.input_top_ks.fill_(spec_k_state.policy.base_top_k)
+            else:
+                spec_k_state.release(scheduler_output.finished_req_ids)
+                spec_k_state.invalidate_drafts(scheduler_output.preempted_req_ids or ())
+                if not is_profile:
+                    budgets = spec_k_state.input_top_ks
         profiling_config = self.ascend_config.scheduler_config.profiling_chunk_config
         execution_start_time = _start_profiling_chunk_timing(
             profiling_config,
@@ -646,7 +686,7 @@ class NPUModelRunner(GPUModelRunner):
         # Randomized profiling was added on the release branch after the verified main pin.
         profile_kwargs = {"randomize_inputs": randomize_inputs} if vllm_version_is("0.31.0") else {}
         forward_failed = True
-        with dp_coordination_context:
+        with dp_coordination_context, override_mrv2_token_top_ks(budgets):
             try:
                 output = super().execute_model(
                     scheduler_output,
@@ -663,6 +703,14 @@ class NPUModelRunner(GPUModelRunner):
                 finish_execution = getattr(self.model_state, "finish_execution", None)
                 if finish_execution is not None:
                     finish_execution(failed=forward_failed)
+        if (
+            spec_k_state is not None
+            and spec_k_state.stats is not None
+            and not dummy_run
+            and not is_profile
+            and scheduler_output.total_num_scheduled_tokens > 0
+        ):
+            spec_k_state.stats.complete_step()
         if not dummy_run and not is_profile:
             self._maybe_send_draft_kv(scheduler_output)
         self.model_state.kvpp_is_dummy_run = False
@@ -1082,7 +1130,21 @@ class NPUModelRunner(GPUModelRunner):
         # For mla/sfa, update cos/sin. Here is for execute_model.
         update_cos_sin(input_batch.positions)
 
+        self._prepare_spec_k_inputs(input_batch, scheduler_output)
+
         return input_batch
+
+    def _prepare_spec_k_inputs(self, input_batch, scheduler_output) -> None:
+        state = getattr(self, "_spec_k_state", None)
+        if state is not None:
+            state.prepare(
+                input_batch.req_ids,
+                input_batch.num_scheduled_tokens,
+                scheduler_output.scheduled_spec_decode_tokens,
+                self.req_states.prompt_len.np[input_batch.idx_mapping_np],
+                input_batch.positions[: input_batch.num_tokens],
+                input_batch.num_tokens_after_padding,
+            )
 
     def prepare_inputs(
         self,

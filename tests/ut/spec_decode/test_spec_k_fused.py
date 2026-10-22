@@ -302,5 +302,7 @@ def test_runtime_config_requires_the_supported_fused_path(monkeypatch):
         ascend_config.AscendConfig._validate_spec_k(cfg, vc)
     cfg.enable_fused_mc2 = 1
     vc.use_v2_model_runner = True
-    with pytest.raises(ValueError, match="Runner V1"):
+    ascend_config.AscendConfig._validate_spec_k(cfg, vc)
+    vc.speculative_config.draft_model_config = SimpleNamespace(hf_config=SimpleNamespace(dspark_draft_topk=32))
+    with pytest.raises(ValueError, match="full-vocabulary"):
         ascend_config.AscendConfig._validate_spec_k(cfg, vc)

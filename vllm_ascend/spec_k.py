@@ -45,6 +45,67 @@ class SpecKPolicy:
         return torch.cat((budgets, bonus[:, None]), dim=1).contiguous()
 
 
+class SpecKDraftBudgetState:
+    """Capture post-Markov entropy into fixed V2 request-slot budget buffers.
+
+    Each sampling hook records only small entropy partials on NPU, not a
+    second full-vocabulary logits tensor. The existing draft graph captures
+    these operations. Final budgets scatter directly by the speculator's
+    persistent sample_idx_mapping; unscheduled requests retain their budgets.
+    """
+
+    def __init__(self, policy: SpecKPolicy, max_num_reqs: int, steps: int, vocab_size: int):
+        self.policy = policy
+        self.steps = steps
+        self.vocab_size = vocab_size
+        device = policy.log_thresholds.device
+        self.budgets = torch.full((max_num_reqs, steps + 1), policy.base_top_k, dtype=torch.int32, device=device)
+        self.parts = None
+        self.logits = None
+        if device.type == "npu":
+            from vllm_ascend.ops.triton.spec_decode.spec_k import create_entropy_partials
+
+            self.parts = create_entropy_partials(max_num_reqs, steps, vocab_size, device)
+        else:
+            self.logits = torch.empty((max_num_reqs, steps, vocab_size), device=device, dtype=torch.float32)
+
+    def record(self, logits: torch.Tensor, step: int) -> None:
+        if logits.ndim != 2 or logits.shape[1] != self.vocab_size or logits.shape[0] > self.budgets.shape[0]:
+            raise ValueError("Spec-K post-Markov logits do not match the allocated draft capacity")
+        if not 0 <= step < self.steps:
+            raise ValueError("Spec-K draft step is outside the fixed verification block")
+        if self.parts is not None:
+            from vllm_ascend.ops.triton.spec_decode.spec_k import record_entropy_partials
+
+            record_entropy_partials(logits, self.parts, self.steps, step)
+        else:
+            self.logits[: logits.shape[0], step].copy_(logits)
+
+    def finish(self, num_reqs: int, sample_idx_mapping: torch.Tensor) -> None:
+        if not 0 <= num_reqs <= self.budgets.shape[0] or sample_idx_mapping.numel() < num_reqs * self.steps:
+            raise ValueError("Spec-K draft request mapping exceeds the allocated capacity")
+        if not num_reqs:
+            return
+        if self.parts is not None:
+            from vllm_ascend.ops.triton.spec_decode.spec_k import finish_entropy_budgets
+
+            finish_entropy_budgets(
+                self.parts,
+                self.policy.log_thresholds,
+                self.budgets,
+                num_reqs,
+                self.steps,
+                self.policy.base_top_k,
+                self.policy.apply_last_token,
+                sample_idx_mapping,
+            )
+        else:
+            values = self.policy.top_ks_from_logits(self.logits[:num_reqs])
+            rows = sample_idx_mapping[: num_reqs * self.steps : self.steps].long()
+            valid = (rows >= 0) & (rows < self.budgets.shape[0])
+            self.budgets.index_copy_(0, rows[valid], values[valid])
+
+
 @torch.library.custom_op("vllm::ascend_spec_k_prune_routes", mutates_args=("weights", "ids"))
 def prune_fused_routes(weights: torch.Tensor, ids: torch.Tensor, budgets: torch.Tensor, num_experts: int) -> None:
     """Use the fused kernel's reserved expert bucket, never a real EP expert.
@@ -172,6 +233,26 @@ class SpecKBudgetState:
             raise ValueError("Spec-K draft budget rows do not match the proposer request batch")
         self.previous_rows = {req_id: row for row, req_id in enumerate(req_ids)}
         self.previous_budgets = budgets
+
+    def set_indexed_drafts(self, req_ids: Sequence[str], row_indices: Sequence[int], budgets: torch.Tensor) -> None:
+        """Bind V2's persistent request-slot output without copying budgets.
+
+        Keep mappings for requests absent from this batch: their previously
+        generated drafts remain in the scheduler and in their device slots.
+        Preemption invalidates the slot mapping while preserving history.
+        """
+        if budgets.ndim != 2 or len(req_ids) != len(row_indices):
+            raise ValueError("Spec-K indexed draft mapping has inconsistent dimensions")
+        if any(not 0 <= int(row) < budgets.shape[0] for row in row_indices):
+            raise ValueError("Spec-K indexed draft mapping contains an invalid request slot")
+        if self.previous_budgets is not budgets:
+            self.previous_rows.clear()
+        self.previous_budgets = budgets
+        self.previous_rows.update((req_id, int(row)) for req_id, row in zip(req_ids, row_indices))
+
+    def invalidate_drafts(self, req_ids: Sequence[str]) -> None:
+        for req_id in req_ids:
+            self.previous_rows.pop(req_id, None)
 
     def prepare(
         self,

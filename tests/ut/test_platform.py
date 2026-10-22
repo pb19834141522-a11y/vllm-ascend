@@ -1040,6 +1040,7 @@ class TestNPUPlatform(TestBase):
         mock_inference_mode.assert_called_once()
 
     def test_set_additional_forward_context_v2_includes_required_moe_fields(self):
+        from vllm_ascend.ascend_forward_context import override_mrv2_token_top_ks
         from vllm_ascend.ops.fused_moe.moe_comm_method import FusedMC2CommImpl
         from vllm_ascend.ops.fused_moe.token_dispatcher import TokenDispatcherWithMC2
 
@@ -1053,6 +1054,7 @@ class TestNPUPlatform(TestBase):
         dummy_comm_method._apply_cann_mega_moe = MagicMock(return_value=(output, None))
 
         with (
+            override_mrv2_token_top_ks(torch.full((8,), 3, dtype=torch.int32)),
             patch("vllm_ascend.platform.envs_vllm.VLLM_USE_V2_MODEL_RUNNER", True, create=True),
             patch("vllm_ascend.platform.is_moe_model", return_value=True),
             patch("vllm_ascend.platform.enable_sp", return_value=False),
@@ -1076,6 +1078,7 @@ class TestNPUPlatform(TestBase):
         self.assertEqual(kwargs["max_tokens_across_pcp"], 5)
         self.assertIs(kwargs["moe_comm_method"], dummy_comm_method)
         self.assertEqual(kwargs["dynamic_mx_quant_scale_alg"], 0)
+        self.assertEqual(kwargs["token_top_ks"].tolist(), [3] * 5)
 
         # Missing V2 extras previously sent MXFP weights to the legacy INT
         # dispatch/FFN/combine branch, which requires scale-bias tensors.

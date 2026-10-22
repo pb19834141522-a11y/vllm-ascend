@@ -119,3 +119,42 @@ def test_real_budget_kernel_counts_consumed_budgets_excluding_prompt_and_padding
     # A second execution is real verification work even if positions repeat.
     prepare_budgets(history, output, previous, metadata, positions, 512, 400, 6, histogram)
     assert histogram.tolist() == [0, 0, 0, 410, 0, 0, 202]
+
+
+@pytest.mark.parametrize("steps", [1, 7])
+@pytest.mark.parametrize("vocab", [129, 4097, 129280])
+def test_v2_post_markov_partials_scatter_by_request_slot(steps, vocab):
+    from vllm_ascend.ops.triton.spec_decode.spec_k import (
+        create_entropy_partials,
+        finish_entropy_budgets,
+        record_entropy_partials,
+    )
+
+    policy = SpecKPolicy(SpecKConfig(enabled=True, ppl_thresholds=(3.1469, 1.8222)), 6, torch.device("cpu"))
+    logits = torch.zeros(3, steps, vocab)
+    logits[0, :, 0] = 30
+    logits[2, :, 0] = 40
+    cache = torch.full((5, steps + 1), 6, dtype=torch.int32)
+    parts = create_entropy_partials(5, steps, vocab, torch.device("cpu"))
+    mapping = torch.tensor([4, 1, -1], dtype=torch.int32).repeat_interleave(steps)
+    for step in range(steps):
+        record_entropy_partials(logits[:, step], parts, steps, step)
+    finish_entropy_budgets(parts, policy.log_thresholds, cache, 3, steps, 6, False, mapping)
+    expected = policy.top_ks_from_logits(logits)
+    assert torch.equal(cache[4], expected[0])
+    assert torch.equal(cache[1], expected[1])
+    assert torch.all(cache[[0, 2, 3]] == 6)
+    # Real-request batch shrinks/reorders; the absent request keeps its budget.
+    for step in range(steps):
+        record_entropy_partials(torch.zeros(1, vocab), parts, steps, step)
+    finish_entropy_budgets(
+        parts,
+        policy.log_thresholds,
+        cache,
+        1,
+        steps,
+        6,
+        False,
+        torch.tensor([2], dtype=torch.int32).repeat_interleave(steps),
+    )
+    assert torch.equal(cache[4], expected[0])

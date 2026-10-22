@@ -10,7 +10,15 @@ _METADATA_WIDTH = 6
 
 
 @triton.jit
-def _entropy_partials(Logits, Parts, V: tl.constexpr, CHUNKS: tl.constexpr, BLOCK: tl.constexpr):
+def _entropy_partials(
+    Logits,
+    Parts,
+    V: tl.constexpr,
+    CHUNKS: tl.constexpr,
+    BLOCK: tl.constexpr,
+    STEPS: tl.constexpr = 1,
+    STEP: tl.constexpr = 0,
+):
     row = tl.program_id(0)
     chunk = tl.program_id(1)
     cols = chunk * BLOCK + tl.arange(0, BLOCK)
@@ -20,7 +28,7 @@ def _entropy_partials(Logits, Parts, V: tl.constexpr, CHUNKS: tl.constexpr, BLOC
     shifted = tl.where(finite, values - maximum, 0.0)
     exponentials = tl.where(finite, tl.exp(shifted), 0.0)
     invalid = tl.sum(((values != values) | (values == float("inf"))).to(tl.int32), 0) > 0
-    offset = (row * CHUNKS + chunk) * 3
+    offset = ((row * STEPS + STEP) * CHUNKS + chunk) * 3
     tl.store(Parts + offset, tl.where(invalid, float("nan"), maximum))
     tl.store(Parts + offset + 1, tl.sum(exponentials, 0))
     tl.store(Parts + offset + 2, tl.sum(exponentials * shifted, 0))
@@ -39,35 +47,81 @@ def _entropy_budgets(
     TOKEN_BLOCK: tl.constexpr,
     CHUNK_BLOCK: tl.constexpr,
     THRESHOLD_BLOCK: tl.constexpr,
+    RowIndices,
+    ROW_STRIDE: tl.constexpr,
+    OUTPUT_ROWS: tl.constexpr,
 ):
     req = tl.program_id(0)
-    tokens = tl.arange(0, TOKEN_BLOCK)
-    chunks = tl.arange(0, CHUNK_BLOCK)
-    mask = (tokens[:, None] < S) & (chunks[None, :] < CHUNKS)
-    offsets = ((req * S + tokens[:, None]) * CHUNKS + chunks[None, :]) * 3
-    maxima = tl.load(Parts + offsets, mask, other=-float("inf"))
-    sums = tl.load(Parts + offsets + 1, mask, other=0.0)
-    weighted = tl.load(Parts + offsets + 2, mask, other=0.0)
-    maximum = tl.max(maxima, 1)
-    valid = mask & (sums > 0) & (maxima == maxima)
-    shifts = tl.where(valid, maxima - maximum[:, None], 0.0)
-    factors = tl.where(valid, tl.exp(shifts), 0.0)
-    total = tl.sum(factors * sums, 1)
-    moment = tl.sum(factors * (weighted + sums * shifts), 1)
-    entropy = tl.log(total) - moment / total
-    invalid = (tl.sum((maxima != maxima).to(tl.int32), 1) > 0) | (total <= 0) | (entropy != entropy)
-    entropy = tl.maximum(entropy, 0.0)
-    threshold_slots = tl.arange(0, THRESHOLD_BLOCK)
-    thresholds = tl.load(Thresholds + threshold_slots, threshold_slots < N_THRESHOLDS, other=float("inf"))
-    increments = tl.sum(
-        ((entropy[:, None] >= thresholds[None, :]) & (threshold_slots[None, :] < N_THRESHOLDS)).to(tl.int32), 1
-    )
-    budgets = tl.where(invalid, BASE_K, BASE_K - N_THRESHOLDS + increments)
-    tl.store(Budgets + req * (S + 1) + tokens, budgets, tokens < S)
-    bonus = BASE_K
-    if APPLY_BONUS:
-        bonus = tl.sum(tl.where(tokens < S, budgets, 0), 0) // S
-    tl.store(Budgets + req * (S + 1) + S, bonus)
+    output_row = req
+    if ROW_STRIDE:
+        output_row = tl.load(RowIndices + req * ROW_STRIDE)
+    # Skip padded request slots before any entropy read or output write.
+    if (output_row >= 0) & (output_row < OUTPUT_ROWS):
+        tokens = tl.arange(0, TOKEN_BLOCK)
+        chunks = tl.arange(0, CHUNK_BLOCK)
+        mask = (tokens[:, None] < S) & (chunks[None, :] < CHUNKS)
+        offsets = ((req * S + tokens[:, None]) * CHUNKS + chunks[None, :]) * 3
+        maxima = tl.load(Parts + offsets, mask, other=-float("inf"))
+        sums = tl.load(Parts + offsets + 1, mask, other=0.0)
+        weighted = tl.load(Parts + offsets + 2, mask, other=0.0)
+        maximum = tl.max(maxima, 1)
+        valid = mask & (sums > 0) & (maxima == maxima)
+        shifts = tl.where(valid, maxima - maximum[:, None], 0.0)
+        factors = tl.where(valid, tl.exp(shifts), 0.0)
+        total = tl.sum(factors * sums, 1)
+        moment = tl.sum(factors * (weighted + sums * shifts), 1)
+        entropy = tl.log(total) - moment / total
+        invalid = (tl.sum((maxima != maxima).to(tl.int32), 1) > 0) | (total <= 0) | (entropy != entropy)
+        entropy = tl.maximum(entropy, 0.0)
+        threshold_slots = tl.arange(0, THRESHOLD_BLOCK)
+        thresholds = tl.load(Thresholds + threshold_slots, threshold_slots < N_THRESHOLDS, other=float("inf"))
+        increments = tl.sum(
+            ((entropy[:, None] >= thresholds[None, :]) & (threshold_slots[None, :] < N_THRESHOLDS)).to(tl.int32), 1
+        )
+        budgets = tl.where(invalid, BASE_K, BASE_K - N_THRESHOLDS + increments)
+        tl.store(Budgets + output_row * (S + 1) + tokens, budgets, tokens < S)
+        bonus = BASE_K
+        if APPLY_BONUS:
+            bonus = tl.sum(tl.where(tokens < S, budgets, 0), 0) // S
+        tl.store(Budgets + output_row * (S + 1) + S, bonus)
+
+
+def create_entropy_partials(batch, steps, vocab, device):
+    return torch.empty((batch * steps, triton.cdiv(vocab, _ENTROPY_BLOCK), 3), device=device, dtype=torch.float32)
+
+
+def record_entropy_partials(logits, parts, steps, step):
+    rows, vocab = logits.shape
+    if rows:
+        _entropy_partials[(rows, parts.shape[1])](
+            logits.contiguous(),
+            parts,
+            vocab,
+            parts.shape[1],
+            _ENTROPY_BLOCK,
+            steps,
+            step,
+        )
+
+
+def finish_entropy_budgets(parts, thresholds, budgets, rows, steps, base_top_k, apply_last_token, row_indices=None):
+    if rows:
+        _entropy_budgets[(rows,)](
+            parts,
+            thresholds,
+            budgets,
+            steps,
+            parts.shape[1],
+            thresholds.numel(),
+            base_top_k,
+            apply_last_token,
+            triton.next_power_of_2(steps),
+            triton.next_power_of_2(parts.shape[1]),
+            triton.next_power_of_2(max(1, thresholds.numel())),
+            budgets if row_indices is None else row_indices,
+            0 if row_indices is None else steps,
+            budgets.shape[0],
+        )
 
 
 def entropy_top_ks(logits, thresholds, base_top_k, apply_last_token):
@@ -85,19 +139,7 @@ def entropy_top_ks(logits, thresholds, base_top_k, apply_last_token):
         chunks,
         _ENTROPY_BLOCK,
     )
-    _entropy_budgets[(batch,)](
-        parts,
-        thresholds,
-        budgets,
-        tokens,
-        chunks,
-        thresholds.numel(),
-        base_top_k,
-        apply_last_token,
-        triton.next_power_of_2(tokens),
-        triton.next_power_of_2(chunks),
-        triton.next_power_of_2(max(1, thresholds.numel())),
-    )
+    finish_entropy_budgets(parts, thresholds, budgets, batch, tokens, base_top_k, apply_last_token)
     return budgets
 
 

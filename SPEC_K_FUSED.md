@@ -40,7 +40,8 @@
 ```
 
 目标 decode 仍使用 `FULL_DECODE_ONLY` 图模式，draft 保留 eager。
-暂不支持同时开启动态验证长度。当前迁移针对 A3、Runner V1、整数 W4A8 target、
+暂不支持同时开启动态验证长度。[V2 算法接线与验证边界](SPEC_K_V2.md)已单独说明；
+以下历史记录针对 V1。当前迁移针对 A3、Runner V1/V2、整数 W4A8 target、
 EP 2–32 卡及 TP/DP 并行；不支持 PP/PCP/DCP、LoRA、动态 EPLB、混合 shared placement
 和 KV-transfer。其他模型、量化类型、并行方式需要另外适配和验证。
 

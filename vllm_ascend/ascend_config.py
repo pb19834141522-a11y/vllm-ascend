@@ -974,8 +974,9 @@ class AscendConfig:
         spec = vc.speculative_config
         if spec is None or spec.method != "dspark":
             raise ValueError("Spec-K currently requires DSpark speculative decoding")
-        if vc.use_v2_model_runner:
-            raise ValueError("Spec-K currently requires Model Runner V1")
+        draft_hf = getattr(getattr(spec, "draft_model_config", None), "hf_config", None)
+        if vc.use_v2_model_runner and getattr(draft_hf, "dspark_draft_topk", None) is not None:
+            raise ValueError("Spec-K V2 requires full-vocabulary DSpark logits; disable dspark_draft_topk")
         parallel = vc.parallel_config
         if (
             parallel.pipeline_parallel_size != 1

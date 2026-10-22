@@ -33,12 +33,14 @@ from vllm.v1.worker.gpu.spec_decode.dspark.speculator import (
 )
 from vllm.v1.worker.gpu.spec_decode.eagle.eagle3_utils import get_eagle3_aux_layers_from_config
 
+from vllm_ascend.ascend_config import get_ascend_config
 from vllm_ascend.attention.attention_v1 import AscendAttentionBackend, AscendAttentionState
 from vllm_ascend.attention.mla_v1 import AscendMLABackend
 from vllm_ascend.distributed.kv_transfer.kv_p2p.sfa_pd_rd2h.dspark_context import (
     DSparkContextChunk,
     initialize_draft_context_chunk,
 )
+from vllm_ascend.spec_k import SpecKDraftBudgetState, SpecKPolicy
 from vllm_ascend.utils import lmhead_tp_enable, lmhead_tp_max_num_logits
 from vllm_ascend.worker.dcp_utils import DCPManager
 from vllm_ascend.worker.v2.aclgraph_utils import _get_graph_update_backend
@@ -71,6 +73,16 @@ class AscendDSparkSpeculator(LmheadTPDraftSamplingMixin, DSparkSpeculator):
         self.input_batch: InputBatch | None = None
         self.attn_architecture: str | None = None
         self._init_dcp()
+        self.spec_k_policy = None
+        self.spec_k_draft = None
+        self.spec_k_target = None
+        config = getattr(get_ascend_config(), "spec_k_config", None)
+        if config is not None and config.enabled is True:
+            if self._draft_topk is not None:
+                raise ValueError("Spec-K V2 requires full-vocabulary DSpark logits; disable dspark_draft_topk")
+            hf = vllm_config.model_config.hf_text_config
+            top_k = getattr(hf, "num_experts_per_tok", getattr(hf, "top_k_experts", 0))
+            self.spec_k_policy = SpecKPolicy(config, top_k, device)
 
     def _init_dcp(self) -> None:
         self.use_dcp = self.attn_vllm_config.parallel_config.decode_context_parallel_size > 1
@@ -101,7 +113,44 @@ class AscendDSparkSpeculator(LmheadTPDraftSamplingMixin, DSparkSpeculator):
 
         self._lmhead_tp_wrap_draft_logits(model)
 
+        policy = getattr(self, "spec_k_policy", None)
+        if policy is not None:
+            mapping = getattr(model, "draft_id_to_target_id", None)
+            vocab = mapping.shape[0] if mapping is not None else self.draft_model_config.get_vocab_size()
+            self.spec_k_draft = SpecKDraftBudgetState(policy, self.max_num_reqs, self.num_speculative_steps, vocab)
+
         return model
+
+    def _sample_logits(self, logits, idx_map, sample_pos, step):
+        # Upstream passes the full POST-Markov distribution here. Leave its
+        # greedy/probabilistic sampling unchanged and record only entropy.
+        state = getattr(self, "spec_k_draft", None)
+        if state is not None:
+            state.record(logits, step)
+        return super()._sample_logits(logits, idx_map, sample_pos, step)
+
+    def _generate_draft(
+        self,
+        num_reqs,
+        num_tokens_padded,
+        attn_metadata,
+        slot_mappings,
+        num_tokens_across_dp,
+        cudagraph_runtime_mode=CUDAGraphMode.NONE,
+    ):
+        # Reuse the existing backbone/Markov graph. Its fixed budget output is
+        # written on every replay, not published by capture-only Python code.
+        super()._generate_draft(
+            num_reqs,
+            num_tokens_padded,
+            attn_metadata,
+            slot_mappings,
+            num_tokens_across_dp,
+            cudagraph_runtime_mode,
+        )
+        state = getattr(self, "spec_k_draft", None)
+        if state is not None:
+            state.finish(num_reqs, self.sample_idx_mapping)
 
     def _lmhead_tp_wrap_draft_logits(self, model: torch.nn.Module) -> None:
         """Pad/trim the DSpark draft LM head around its collectives.
@@ -456,7 +505,7 @@ class AscendDSparkSpeculator(LmheadTPDraftSamplingMixin, DSparkSpeculator):
                 parallel_config=self.attn_vllm_config.parallel_config,
             ),
         ):
-            return super().propose(
+            draft_tokens = super().propose(
                 input_batch,
                 attn_metadata,
                 slot_mappings,
@@ -474,3 +523,7 @@ class AscendDSparkSpeculator(LmheadTPDraftSamplingMixin, DSparkSpeculator):
                 mm_inputs,
                 is_profile=is_profile,
             )
+        target = getattr(self, "spec_k_target", None)
+        if target is not None and not dummy_run and not is_profile:
+            target.set_indexed_drafts(input_batch.req_ids, input_batch.idx_mapping_np, self.spec_k_draft.budgets)
+        return draft_tokens

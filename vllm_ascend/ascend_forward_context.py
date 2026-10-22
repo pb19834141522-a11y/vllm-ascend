@@ -46,6 +46,7 @@ class MoECommType(Enum):
 
 
 _MRV2_IN_PROFILE_RUN: ContextVar[bool] = ContextVar("_MRV2_IN_PROFILE_RUN", default=False)
+_MRV2_TOKEN_TOP_KS: ContextVar[torch.Tensor | None] = ContextVar("_MRV2_TOKEN_TOP_KS", default=None)
 
 
 _MEGA_MOE_TOKENS_PER_RANK_LIMIT = 16384
@@ -96,6 +97,29 @@ def override_mrv2_in_profile_run(enabled: bool):
 
 def get_mrv2_in_profile_run() -> bool:
     return _MRV2_IN_PROFILE_RUN.get()
+
+
+@contextmanager
+def override_mrv2_token_top_ks(budgets: torch.Tensor | None):
+    """Publish this runner's target buffer through the platform context hook.
+
+    Scope the reference to execute/capture; it must not leak into another
+    runner or its eager draft. Graphs capture the fixed tensor's address.
+    """
+    token = _MRV2_TOKEN_TOP_KS.set(budgets)
+    try:
+        yield
+    finally:
+        _MRV2_TOKEN_TOP_KS.reset(token)
+
+
+def get_mrv2_token_top_ks(num_tokens: int | None) -> torch.Tensor | None:
+    budgets = _MRV2_TOKEN_TOP_KS.get()
+    if budgets is None:
+        return None
+    if num_tokens is not None and num_tokens > budgets.numel():
+        raise ValueError("Spec-K target graph exceeds the allocated token budget buffer")
+    return budgets[:num_tokens]
 
 
 def use_cann_megamoe(vllm_config: VllmConfig) -> bool:

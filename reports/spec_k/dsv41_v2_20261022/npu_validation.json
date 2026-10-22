@@ -1,0 +1,48 @@
+{
+  "passed": true,
+  "device": "Ascend910_9382",
+  "physical_device": 14,
+  "cases": [
+    {
+      "drafts": 1,
+      "apply_last_token": false,
+      "vocab": 129280,
+      "graph_replays": 2,
+      "padding_slot_untouched": true,
+      "request_reorder_parity": true,
+      "fixed_budget_address": true,
+      "smaller_batch": true
+    },
+    {
+      "drafts": 1,
+      "apply_last_token": true,
+      "vocab": 129280,
+      "graph_replays": 2,
+      "padding_slot_untouched": true,
+      "request_reorder_parity": true,
+      "fixed_budget_address": true,
+      "smaller_batch": true
+    },
+    {
+      "drafts": 7,
+      "apply_last_token": false,
+      "vocab": 129280,
+      "graph_replays": 2,
+      "padding_slot_untouched": true,
+      "request_reorder_parity": true,
+      "fixed_budget_address": true,
+      "smaller_batch": true
+    },
+    {
+      "drafts": 7,
+      "apply_last_token": true,
+      "vocab": 129280,
+      "graph_replays": 2,
+      "padding_slot_untouched": true,
+      "request_reorder_parity": true,
+      "fixed_budget_address": true,
+      "smaller_batch": true
+    }
+  ],
+  "scope": "entropy accumulation, indexed budget cache and NPUGraph replay; not full model serving"
+}

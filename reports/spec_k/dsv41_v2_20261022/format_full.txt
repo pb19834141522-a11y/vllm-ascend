@@ -1,0 +1,3 @@
+[INFO] Installing environment for https://github.com/igorshubovych/markdownlint-cli.
+[INFO] Once installed this environment will be reused.
+[INFO] This may take a few minutes...
