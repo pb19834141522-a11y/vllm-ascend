@@ -143,6 +143,7 @@ def set_ascend_forward_context(
     input_ids: torch.Tensor | None = None,
     dflash_verify_rows=(),
     dflash_topm_state=None,
+    token_top_ks: torch.Tensor | None = None,
 ):
     """A context manager that stores the current forward context,
     can be attention metadata, etc.
@@ -174,6 +175,7 @@ def set_ascend_forward_context(
         forward_context.dflash_verify_rows = dflash_verify_rows
         forward_context.dflash_graph_layout = None
         forward_context.dflash_topm_state = dflash_topm_state
+        forward_context.token_top_ks = token_top_ks
         if dflash_topm_state is not None:
             dflash_topm_state.begin(forward_context)
 

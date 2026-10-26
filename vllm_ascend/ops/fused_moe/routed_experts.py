@@ -27,6 +27,7 @@ from vllm.logger import logger
 from vllm.model_executor.layers.fused_moe import FusedMoERouter, RoutedExperts
 from vllm.model_executor.layers.fused_moe.config import FusedMoEConfig
 from vllm.model_executor.layers.fused_moe.unquantized_fused_moe_method import UnquantizedFusedMoEMethod
+from vllm.model_executor.models.utils import extract_layer_index
 from vllm.model_executor.utils import replace_parameter
 
 from vllm_ascend.ascend_config import get_ascend_config
@@ -42,6 +43,7 @@ from vllm_ascend.ops.fused_moe.force_eplb import get_force_eplb_topk
 from vllm_ascend.ops.fused_moe.moe_comm_method import AllGatherCommImpl, FusedExpertsResult
 from vllm_ascend.ops.fused_moe.moe_utils import get_moe_num_logical_experts
 from vllm_ascend.quantization.quant_type import QuantType
+from vllm_ascend.spec_k import prune_cpu_moe_routes
 from vllm_ascend.utils import ACL_FORMAT_FRACTAL_NZ, maybe_trans_nz
 
 
@@ -401,6 +403,9 @@ class AscendRoutedExperts(RoutedExperts):  # type: ignore[no-redef]
         self.mix_placement = getattr(ascend_config, "mix_placement", False)
         self.enable_npugraph_ex_static_kernel = ascend_config.ascend_compilation_config.enable_static_kernel
         self._use_v2_model_runner = bool(vllm_config.use_v2_model_runner)
+        self._spec_k_prune = ascend_config.spec_k_config.enabled and not ascend_config.spec_k_config.preserves_layer(
+            extract_layer_index(self.layer_name), vllm_config.model_config.hf_text_config.num_hidden_layers
+        )
         self.dynamic_eplb = False
         self.multi_stage = False
         self.load_counter = None
@@ -817,6 +822,11 @@ class AscendRoutedExperts(RoutedExperts):  # type: ignore[no-redef]
             )
             topk_ids = torch.argsort(random_matrix, dim=1)[:, : topk_ids.size(1)].to(topk_ids.dtype)
 
+        budgets = getattr(context, "token_top_ks", None)
+        if self._spec_k_prune and budgets is not None and not context.is_draft_model:
+            prune_cpu_moe_routes(topk_weights, topk_ids, budgets[:topk_ids.shape[0]])
+            if not self.enable_expert_offload:
+                topk_ids = torch.where(topk_ids >= 0, topk_ids, self.moe_config.num_local_experts)
         return topk_weights, topk_ids
 
     def forward_impl(

@@ -18,6 +18,7 @@ from vllm_ascend.attention.utils import enable_pcp
 from vllm_ascend.ops.triton.spec_decode.utils import copy_and_expand_dflash_and_dspark_inputs_kernel
 from vllm_ascend.spec_decode.dflash_proposer import AscendDflashProposer, _compute_num_programs
 from vllm_ascend.spec_decode.utils import DynamicSpecScheduler
+from vllm_ascend.spec_k import SpecKPolicy
 
 
 class AscendDSparkProposer(AscendDflashProposer):
@@ -36,6 +37,12 @@ class AscendDSparkProposer(AscendDflashProposer):
     ):
         super().__init__(vllm_config, device, runner=runner)
         assert vllm_config.speculative_config is not None
+        self.spec_k_policy = None
+        self._last_spec_k_budgets = None
+        config = get_ascend_config().spec_k_config
+        if config.enabled:
+            hf = vllm_config.model_config.hf_text_config
+            self.spec_k_policy = SpecKPolicy(config, getattr(hf, "num_experts_per_tok", 0), device)
         self.sample_from_anchor = getattr(self.draft_model_config.hf_config, "sample_from_anchor", True)
         if self.sample_from_anchor:
             self.num_query_per_req = self.num_speculative_tokens
@@ -104,6 +111,11 @@ class AscendDSparkProposer(AscendDflashProposer):
         self._per_group_query_slot_mapping_buffers: dict[int, torch.Tensor] = {}
         self._per_group_context_slot_mapping_buffers: dict[int, torch.Tensor] = {}
         self._context_slot_mapping_buffers: list[torch.Tensor | None] | None = None
+
+    def take_last_spec_k_budgets(self) -> torch.Tensor | None:
+        budgets = self._last_spec_k_budgets
+        self._last_spec_k_budgets = None
+        return budgets
 
     def _compute_confidence(
         self,

@@ -30,6 +30,7 @@ from vllm.utils.math_utils import cdiv
 
 from vllm_ascend.config_utils import config
 from vllm_ascend.device.hardware_profile import HardwareCapability, get_current_hardware_profile
+from vllm_ascend.spec_k_config import SpecKConfig
 
 if TYPE_CHECKING:
     from vllm.config import VllmConfig
@@ -663,6 +664,7 @@ class AscendConfig:
     finegrained_tp_config: FinegrainedTPConfig = dataclasses.field(default_factory=lambda: FinegrainedTPConfig())
     scheduler_config: SchedulerConfig = dataclasses.field(default_factory=lambda: SchedulerConfig())
     dynamic_spec_config: DynamicSpecConfig = dataclasses.field(default_factory=lambda: DynamicSpecConfig())
+    spec_k_config: SpecKConfig = dataclasses.field(default_factory=SpecKConfig)
     # Still factory-injected: construction depends on vllm_config.
     sparse_kv_offload_config: Any = dataclasses.field(kw_only=True)
     kvpp_config: KVPPConfig = dataclasses.field(default_factory=KVPPConfig, kw_only=True)
@@ -1907,7 +1909,10 @@ class CpuMoeConfig:
         limit = self.config["balance_max_transfers"]
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 32:
             raise ValueError("cpu_moe.balance_max_transfers must be an integer in [1,32]")
-        for key in ("balance_cpu_expert_us", "balance_cpu_extra_route_us", "balance_copy_us", "balance_npu_route_us", "balance_min_gain_us"):
+        for key in (
+            "balance_cpu_expert_us", "balance_cpu_extra_route_us", "balance_copy_us",
+            "balance_npu_route_us", "balance_min_gain_us",
+        ):
             value = self.config[key]
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value < float("inf"):
                 raise ValueError(f"cpu_moe.{key} must be finite and nonnegative")
@@ -2480,6 +2485,7 @@ def init_ascend_config(vllm_config: VllmConfig) -> AscendConfig:
     # the single legitimate entry point — bypassing the factory leaves derived
     # fields at their sentinel defaults.
     new_config.derive_and_validate(vllm_config)
+    new_config.spec_k_config.validate_runtime(vllm_config, new_config)
     new_config.rl_config.apply(new_config)
     new_config.finegrained_tp_config._validate_preconditions(vllm_config)
     new_config.xlite_graph_config._validate_preconditions(vllm_config)

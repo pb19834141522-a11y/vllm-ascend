@@ -20,8 +20,8 @@
 import copy
 import gc
 import inspect
-import os
 import logging
+import os
 from contextlib import AbstractContextManager, nullcontext
 from types import NoneType
 from typing import Any
@@ -800,6 +800,9 @@ class NPUWorker(WorkerBase):
         if self.profiler is not None:
             self.profiler.step()
 
+        spec_k_state = getattr(self.model_runner, "_spec_k_state", None)
+        if spec_k_state is not None and spec_k_state.stats is not None:
+            spec_k_state.stats.set_profile_active(self.profiler is not None and self.profiler.is_running)
         output = self.model_runner.execute_model(scheduler_output, intermediate_tensors)
         if self.use_v2_model_runner and self.model_runner.is_pooling_model and output is None:
             output = self.model_runner.pool()  # type: ignore

@@ -1,3 +1,15 @@
+# 个人分支：DeepSeek V4 Flash / A5 CPU MoE + Spec-K
+
+基于[yxk-fdu分享的CPU MoE分支](https://github.com/yxk-fdu/vllm-ascend/tree/share/cpu-moe-9334-20261020)，
+将我的动态Top-K迁入target验证路径，并在CPU/NPU分流及权重迁移前统一裁剪。
+保留作者的A5运行栈、V1 runner、原生MXFP4/GGUF与CPU/NPU异步执行。
+
+**这是源码移植版本，尚未在A5实机验证。**
+配置、固定版本、修改内容和A5测试步骤见[移植说明](docs/cpu_moe/SPEC_K.zh.md)。
+原作者的[CPU MoE指南](docs/cpu_moe/README.zh.md)继续适用；不使用A3的W4A8二进制。
+
+---
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/vllm-project/vllm-ascend/main/docs/source/logos/vllm-ascend-logo-text-dark.png">

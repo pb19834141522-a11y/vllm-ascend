@@ -11,6 +11,9 @@ MAX_SEQS=8
 SERVED_NAME=deepseek_v4
 GPU_MEM=0.95
 MOE_DEBUG=false
+# Dynamic target expert budgets; leave false for the upstream baseline.
+SPEC_K_ENABLED=${SPEC_K_ENABLED:-false}
+SPEC_K_THRESHOLDS=${SPEC_K_THRESHOLDS:-'[128,128,128]'}
 
 export VLLM_LOGGING_LEVEL=INFO
 export PYTHONUNBUFFERED=1
@@ -105,7 +108,8 @@ NDE_JSON="[$NDE_ARRAY]"
 SPECULATIVE_CONFIG=$(cat <<JSON
 {
     "method": "dspark",
-    "num_speculative_tokens": 7
+    "num_speculative_tokens": 7,
+    "enable_adaptive_verification": false
 }
 JSON
 )
@@ -133,6 +137,13 @@ JSON
 ADDITIONAL_CONFIG=$(cat <<JSON
 {
     "enable_cpu_binding": false,
+    "spec_k_config": {
+        "enabled": $SPEC_K_ENABLED,
+        "ppl_thresholds": $SPEC_K_THRESHOLDS,
+        "full_top_k_layer_range": [0,0],
+        "apply_last_token": false,
+        "log_stats_interval": 100
+    },
     "decode_stats_enabled": false,
     "decode_stats_path": "$LOG_DIR/cpu_moe_${RUN_STAMP}_stats",
     "expert_offload_config": {
