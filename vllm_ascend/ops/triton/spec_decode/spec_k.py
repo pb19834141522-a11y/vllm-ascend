@@ -201,6 +201,7 @@ def _prepare_budgets(
     META_WIDTH: tl.constexpr,
     BLOCK: tl.constexpr,
     HAS_STATS: tl.constexpr,
+    CONTIGUOUS_POSITIONS: tl.constexpr,
 ):
     req = tl.program_id(0)
     tile = tl.program_id(1)
@@ -212,7 +213,15 @@ def _prepare_budgets(
     prompt_len = tl.load(Metadata + req * META_WIDTH + 5)
     local = tile * BLOCK + tl.arange(0, BLOCK)
     active = local < count
-    position = tl.load(Positions + start + local, active, other=-1).to(tl.int64)
+    if CONTIGUOUS_POSITIONS:
+        # V2 emits consecutive positions within each scheduled request. Keep
+        # that affine address visible to the compiler: a gathered scatter to
+        # History otherwise generates software locks that can stall when an
+        # eager budget kernel interleaves with target/draft graph replays.
+        position_start = tl.load(Positions + start + tile * BLOCK, tile * BLOCK < count, other=0).to(tl.int64)
+        position = position_start + tl.arange(0, BLOCK)
+    else:
+        position = tl.load(Positions + start + local, active, other=-1).to(tl.int64)
     valid_position = active & (position >= 0) & (position < MAX_LEN)
     history_offset = slot.to(tl.int64) * MAX_LEN + position
     budgets = tl.load(History + history_offset, valid_position, other=BASE_K)
@@ -232,7 +241,19 @@ def _prepare_budgets(
             tl.atomic_add(Histogram + k, count_k, mask=count_k > 0, sem="relaxed")
 
 
-def prepare_budgets(history, output, previous, metadata, positions, max_len, max_count, base_top_k, histogram=None):
+def prepare_budgets(
+    history,
+    output,
+    previous,
+    metadata,
+    positions,
+    max_len,
+    max_count,
+    base_top_k,
+    histogram=None,
+    *,
+    contiguous_positions=False,
+):
     width = 0 if previous is None else previous.shape[1]
     _prepare_budgets[(metadata.shape[0], triton.cdiv(max_count, _BUDGET_BLOCK))](
         history,
@@ -247,4 +268,5 @@ def prepare_budgets(history, output, previous, metadata, positions, max_len, max
         _METADATA_WIDTH,
         _BUDGET_BLOCK,
         histogram is not None,
+        contiguous_positions,
     )

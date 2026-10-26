@@ -1,0 +1,12 @@
+{
+  "markdown_relative_links": "passed",
+  "documents": [
+    "README.md",
+    "SPEC_K_V2.md",
+    "reports/spec_k/dsv41_v2_async_20261023/README.md",
+    "reports/spec_k/dsv41_v2_async_20261023/REPORT.md"
+  ],
+  "archive_json": "passed",
+  "python_ast": "passed",
+  "upstream_readme_preserved_exactly": true
+}

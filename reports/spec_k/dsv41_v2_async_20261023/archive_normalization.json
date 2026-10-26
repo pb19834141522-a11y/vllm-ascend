@@ -1,0 +1,26 @@
+[
+  {
+    "path": "reports/spec_k/dsv41_v2_async_20261023/outside_dynamic_rank0.csv",
+    "original_sha256": "073df3f0961de83e258bbcdd07a9539f2447797e593e1a527a1029e74cd7d574",
+    "normalized_sha256": "18a236925e9784c8a84874af30b0d92e7baa161f6a758f1d7a6f7279743b1079",
+    "change": "Line endings/trailing whitespace only; numeric/compiler content unchanged"
+  },
+  {
+    "path": "reports/spec_k/dsv41_v2_async_20261023/rank0_step_coordinates.csv",
+    "original_sha256": "2bf3307b5d88b9009558653f5331d5d2c71823173cde921da0877732398dc3b4",
+    "normalized_sha256": "3b733eba46d80c84a271377f5a0b34e83efdf219a5be18556bd08a291ec1d054",
+    "change": "Line endings/trailing whitespace only; numeric/compiler content unchanged"
+  },
+  {
+    "path": "reports/spec_k/dsv41_v2_async_20261023/outside_baseline_rank0.csv",
+    "original_sha256": "f28ac2f0c990f5fef076ac13ffc40e880b11fb821eb037a8beb5fd9255322344",
+    "normalized_sha256": "30bf93d1f01e75ab8e83b6708de730674cbfea09f60926da4e32b472f357b062",
+    "change": "Line endings/trailing whitespace only; numeric/compiler content unchanged"
+  },
+  {
+    "path": "reports/spec_k/dsv41_v2_async_20261023/compiler_evidence/after_0.ttadapter",
+    "original_sha256": "7098742b41d4e90fa6979c6058d6aa828980b619f39b636e5be426a72062d9b4",
+    "normalized_sha256": "37cdf63666e10d49e3a58d3b6db80fa1f30e404713390169ffaafe5fca8176dd",
+    "change": "Line endings/trailing whitespace only; numeric/compiler content unchanged"
+  }
+]

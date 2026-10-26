@@ -1,0 +1,23 @@
+{
+  "sustained_window": {
+    "duration": 222.55768799001817,
+    "tokens": 374509,
+    "output_throughput": 1682.7502270638115,
+    "note": "Maintained concurrency32 with replacement prefills; not pure decode plateau"
+  },
+  "request_weighted_return_interval_ms": 82.17644908093143,
+  "tpot_times_accepted_length_ms": 82.39024106060904,
+  "baseline_relative": {
+    "output_throughput": 26.341353055364625,
+    "mean_tpot_ms": -17.621691780069114,
+    "mean_ttft_ms": -66.09123808501172,
+    "spec_decode_acceptance_length": 16.24176117722824
+  },
+  "previous_fenced_relative": {
+    "output_throughput": 19.966973847551017,
+    "mean_tpot_ms": -15.285042724797604,
+    "mean_ttft_ms": -23.271284024993722,
+    "spec_decode_acceptance_length": 0.4129286479447769
+  },
+  "same_prompts_as_baseline": true
+}

@@ -1,0 +1,26 @@
+[
+  {
+    "dynamic": false,
+    "profile": false,
+    "argument_validation": "passed",
+    "model_execution": false
+  },
+  {
+    "dynamic": false,
+    "profile": true,
+    "argument_validation": "passed",
+    "model_execution": false
+  },
+  {
+    "dynamic": true,
+    "profile": false,
+    "argument_validation": "passed",
+    "model_execution": false
+  },
+  {
+    "dynamic": true,
+    "profile": true,
+    "argument_validation": "passed",
+    "model_execution": false
+  }
+]

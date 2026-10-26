@@ -221,3 +221,4 @@ def test_runner_initializes_shared_policy_and_tp0_only_statistics(monkeypatch, t
     assert runner.speculator.spec_k_target is runner._spec_k_state
     assert (runner._spec_k_state.stats is not None) == (tp_rank == 0)
     assert not runner._spec_k_state.metadata.cpu.is_pinned()
+    assert runner._spec_k_state.contiguous_positions

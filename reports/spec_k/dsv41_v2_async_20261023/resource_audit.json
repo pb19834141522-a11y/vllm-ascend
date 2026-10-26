@@ -1,0 +1,117 @@
+{
+  "samples": 57,
+  "foreign_during_owned_service": [],
+  "foreign_after_service_stopped": [
+    {
+      "at_unix": 1792720317.4849815,
+      "phase": "parse_profile.sh",
+      "foreign": [
+        {
+          "board": 0,
+          "host_pid": 3435636,
+          "process": "python3",
+          "our_container": false
+        },
+        {
+          "board": 0,
+          "host_pid": 3435640,
+          "process": "python3",
+          "our_container": false
+        }
+      ],
+      "records": [
+        {
+          "board": 0,
+          "output": "\tNPU ID                         : 0\n\tChip Count                     : 2\n\n\tProcess id:3435636 Process name:python3           Process memory(MB):113\n\tChip ID                        : 0\n\n\tProcess id:3435640 Process name:python3           Process memory(MB):113\n\tChip ID                        : 1\n\n",
+          "exit_code": 0,
+          "processes": [
+            {
+              "host_pid": 3435636,
+              "process": "python3",
+              "our_container": false
+            },
+            {
+              "host_pid": 3435640,
+              "process": "python3",
+              "our_container": false
+            }
+          ]
+        },
+        {
+          "board": 4,
+          "output": "\tNPU ID                         : 4\n\tChip Count                     : 2\n\n\tNo process in device.\n\tChip ID                        : 0\n\n\tNo process in device.\n\tChip ID                        : 1\n\n",
+          "exit_code": 0,
+          "processes": []
+        },
+        {
+          "board": 5,
+          "output": "\tNPU ID                         : 5\n\tChip Count                     : 2\n\n\tNo process in device.\n\tChip ID                        : 0\n\n\tNo process in device.\n\tChip ID                        : 1\n\n",
+          "exit_code": 0,
+          "processes": []
+        },
+        {
+          "board": 6,
+          "output": "\tNPU ID                         : 6\n\tChip Count                     : 2\n\n\tNo process in device.\n\tChip ID                        : 0\n\n\tNo process in device.\n\tChip ID                        : 1\n\n",
+          "exit_code": 0,
+          "processes": []
+        }
+      ]
+    },
+    {
+      "at_unix": 1792720333.1105633,
+      "phase": "complete",
+      "foreign": [
+        {
+          "board": 0,
+          "host_pid": 3435636,
+          "process": "python3",
+          "our_container": false
+        },
+        {
+          "board": 0,
+          "host_pid": 3435640,
+          "process": "python3",
+          "our_container": false
+        }
+      ],
+      "records": [
+        {
+          "board": 0,
+          "output": "\tNPU ID                         : 0\n\tChip Count                     : 2\n\n\tProcess id:3435636 Process name:python3           Process memory(MB):1175\n\tChip ID                        : 0\n\n\tProcess id:3435640 Process name:python3           Process memory(MB):1175\n\tChip ID                        : 1\n\n",
+          "exit_code": 0,
+          "processes": [
+            {
+              "host_pid": 3435636,
+              "process": "python3",
+              "our_container": false
+            },
+            {
+              "host_pid": 3435640,
+              "process": "python3",
+              "our_container": false
+            }
+          ]
+        },
+        {
+          "board": 4,
+          "output": "\tNPU ID                         : 4\n\tChip Count                     : 2\n\n\tNo process in device.\n\tChip ID                        : 0\n\n\tNo process in device.\n\tChip ID                        : 1\n\n",
+          "exit_code": 0,
+          "processes": []
+        },
+        {
+          "board": 5,
+          "output": "\tNPU ID                         : 5\n\tChip Count                     : 2\n\n\tNo process in device.\n\tChip ID                        : 0\n\n\tNo process in device.\n\tChip ID                        : 1\n\n",
+          "exit_code": 0,
+          "processes": []
+        },
+        {
+          "board": 6,
+          "output": "\tNPU ID                         : 6\n\tChip Count                     : 2\n\n\tNo process in device.\n\tChip ID                        : 0\n\n\tNo process in device.\n\tChip ID                        : 1\n\n",
+          "exit_code": 0,
+          "processes": []
+        }
+      ]
+    }
+  ],
+  "note": "Other Python processes appeared on chip0 only after our server had stopped, during offline parsing."
+}

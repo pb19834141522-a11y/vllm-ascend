@@ -1,0 +1,179 @@
+{
+  "completed": 384,
+  "failed": 0,
+  "duration": 243.05740158999106,
+  "total_output_tokens": 393216,
+  "output_throughput": 1617.7906841253437,
+  "mean_tpot_ms": 18.56852376135294,
+  "mean_ttft_ms": 552.5896234898937,
+  "spec_decode_acceptance_rate": 49.10130876738961,
+  "spec_decode_acceptance_length": 4.437091613717273,
+  "spec_decode_num_drafts": 88764,
+  "spec_decode_draft_tokens": 621348,
+  "spec_decode_accepted_tokens": 305090,
+  "configuration": {
+    "source_model": "/home/models/DeepSeek-V4.1-Flash-1017-w4a8-Ascend",
+    "runtime_model": "/tmp/p00948912-dsv41-1017-runtime-20261021T081310Z",
+    "devices": [
+      0,
+      1,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13
+    ],
+    "port": 18850,
+    "container": "p00948912-dsv41-dev-20261019",
+    "tp": 8,
+    "dp": 1,
+    "ep": 8,
+    "num_draft": 7,
+    "max_num_seqs": 32,
+    "e2e_requests": 384,
+    "e2e_concurrency": 32,
+    "output_tokens": 1024,
+    "ignore_eos": true,
+    "seed": 42,
+    "profile_delay_steps": 100,
+    "profile_steps": 30,
+    "source_untouched": true,
+    "baseline_reference": "/home/p00948912/vllm_profile/dsv41_v2_draft_graph_baseline_20261022_065539",
+    "spec_k_config": {
+      "enabled": true,
+      "ppl_thresholds": [
+        128,
+        128,
+        128
+      ],
+      "full_top_k_layer_range": [
+        0,
+        0
+      ],
+      "apply_last_token": false,
+      "log_stats_interval": 100
+    },
+    "mode": "topk",
+    "fix_validation": "/home/p00948912/dsv41_dev_20261019/runtime/spec_k_runtime_metadata_fix_20261022_011829",
+    "model_runner": "V2",
+    "draft_enforce_eager": false,
+    "vllm_commit": "c4df37dfcc7f72ca41cd43801a468526ecf99a2b",
+    "ascend_commit": "636236d93d4ec392ceae4c6644bd013370a03d9d",
+    "comparison_note": "Physical devices differ from previous baseline; one run does not establish a stable performance gain.",
+    "enable_dsa_cp": false,
+    "target_entry_device_synchronize": false,
+    "source_code_unchanged": false,
+    "workaround_note": "No model execution fences. Only Triton chip-identification query hook retained. Repo fixes V2 History addressing to avoid generated software scatter locks.",
+    "fix": "V2 contiguous-position affine History access"
+  },
+  "actual_target_topk": {
+    "definition": "Actual target verification input-token budget; padding/prefill excluded, final Top-6 position included; not accepted tokens only or rank-local expert counts.",
+    "e2e384": {
+      "tokens": 712728,
+      "top_k_sum": 2437350,
+      "avg_top_k": 3.419747785971647,
+      "histogram": {
+        "1": 0,
+        "2": 0,
+        "3": 613006,
+        "4": 0,
+        "5": 0,
+        "6": 99722
+      }
+    },
+    "e2e384_session": 3,
+    "profile": {
+      "tokens": 7680,
+      "top_k_sum": 26058,
+      "avg_top_k": 3.39296875,
+      "histogram": {
+        "1": 0,
+        "2": 0,
+        "3": 6674,
+        "4": 0,
+        "5": 0,
+        "6": 1006
+      }
+    },
+    "profile_session": 5,
+    "profile_id": 1,
+    "all_final_sessions": [
+      {
+        "session": 1,
+        "scope": "workload",
+        "tokens": 48,
+        "top_k_sum": 162,
+        "avg_top_k": 3.375,
+        "histogram": {
+          "1": 0,
+          "2": 0,
+          "3": 42,
+          "4": 0,
+          "5": 0,
+          "6": 6
+        }
+      },
+      {
+        "session": 2,
+        "scope": "workload",
+        "tokens": 1480,
+        "top_k_sum": 5037,
+        "avg_top_k": 3.4033783783783784,
+        "histogram": {
+          "1": 0,
+          "2": 0,
+          "3": 1281,
+          "4": 0,
+          "5": 0,
+          "6": 199
+        }
+      },
+      {
+        "session": 3,
+        "scope": "workload",
+        "tokens": 712728,
+        "top_k_sum": 2437350,
+        "avg_top_k": 3.419747785971647,
+        "histogram": {
+          "1": 0,
+          "2": 0,
+          "3": 613006,
+          "4": 0,
+          "5": 0,
+          "6": 99722
+        }
+      },
+      {
+        "session": 4,
+        "scope": "workload",
+        "tokens": 1312,
+        "top_k_sum": 4572,
+        "avg_top_k": 3.4847560975609757,
+        "histogram": {
+          "1": 0,
+          "2": 0,
+          "3": 1100,
+          "4": 0,
+          "5": 0,
+          "6": 212
+        }
+      },
+      {
+        "session": 5,
+        "scope": "workload",
+        "tokens": 59640,
+        "top_k_sum": 203889,
+        "avg_top_k": 3.418661971830986,
+        "histogram": {
+          "1": 0,
+          "2": 0,
+          "3": 51317,
+          "4": 0,
+          "5": 0,
+          "6": 8323
+        }
+      }
+    ]
+  }
+}

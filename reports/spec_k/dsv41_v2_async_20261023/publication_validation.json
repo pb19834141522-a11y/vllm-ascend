@@ -1,0 +1,10 @@
+{
+  "scan": "common credential patterns only, not a complete Gitleaks/CI run",
+  "potential_credential_matches": 0,
+  "scanned_staged_files": 41,
+  "diff_check": "passed",
+  "full_format_exit_code": 124,
+  "full_format_status": "timeout initializing GitHub hook environment",
+  "inference_environment_dependencies_changed": false,
+  "model_source_changed_in_this_archive_task": false
+}

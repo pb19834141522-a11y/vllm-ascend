@@ -1,0 +1,25 @@
+.......................................                                  [100%]
+=============================== warnings summary ===============================
+../../../../usr/local/python3.12.13/lib/python3.12/site-packages/torch/jit/_script.py:362: 14 warnings
+  /usr/local/python3.12.13/lib/python3.12/site-packages/torch/jit/_script.py:362: DeprecationWarning: `torch.jit.script_method` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+tests/ut/spec_decode/test_spec_k_triton_interpreter.py: 19 warnings
+  /usr/local/python3.12.13/lib/python3.12/site-packages/triton/runtime/interpreter.py:446: RuntimeWarning: invalid value encountered in subtract
+    return TensorHandle(op(lhs.data, rhs.data), lhs.dtype.scalar)
+
+tests/ut/spec_decode/test_spec_k_triton_interpreter.py: 18 warnings
+  /usr/local/python3.12.13/lib/python3.12/site-packages/triton/runtime/interpreter.py:537: RuntimeWarning: divide by zero encountered in log
+    return TensorHandle(op(arg.data), arg.dtype.scalar)
+
+tests/ut/spec_decode/test_spec_k_triton_interpreter.py: 18 warnings
+  /usr/local/python3.12.13/lib/python3.12/site-packages/triton/runtime/interpreter.py:446: RuntimeWarning: invalid value encountered in divide
+    return TensorHandle(op(lhs.data, rhs.data), lhs.dtype.scalar)
+
+tests/ut/spec_decode/test_spec_k_triton_interpreter.py::test_masked_vocab_and_invalid_distributions[thresholds0]
+tests/ut/spec_decode/test_spec_k_triton_interpreter.py::test_masked_vocab_and_invalid_distributions[thresholds1]
+  /usr/local/python3.12.13/lib/python3.12/site-packages/triton/runtime/interpreter.py:446: RuntimeWarning: invalid value encountered in multiply
+    return TensorHandle(op(lhs.data, rhs.data), lhs.dtype.scalar)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+39 passed, 71 warnings in 33.54s

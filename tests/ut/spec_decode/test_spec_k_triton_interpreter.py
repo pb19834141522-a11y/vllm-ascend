@@ -78,7 +78,8 @@ def test_route_kernel_handles_replacement_prefill_row_counts(rows):
     assert torch.all(ids[~active] == 384) and torch.all(weights[~active] == 0)
 
 
-def test_real_metadata_kernel_reorders_recomputes_and_preserves_prompt_rows():
+@pytest.mark.parametrize("contiguous_positions", [False, True])
+def test_real_metadata_kernel_reorders_recomputes_and_preserves_prompt_rows(contiguous_positions):
     history = torch.full((3, 64), 6, dtype=torch.int32)
     history[0, 12:15] = torch.tensor([5, 4, 3])
     previous = torch.tensor([[3, 4, 5, 3, 4, 6], [5, 3, 4, 5, 3, 6]], dtype=torch.int32)
@@ -87,25 +88,29 @@ def test_real_metadata_kernel_reorders_recomputes_and_preserves_prompt_rows():
     positions = torch.tensor([5, 6, 7, 8, 9, 10, 12, 13, 14, 0, 1, 2], dtype=torch.int64)
     actual_history = history.clone()
     actual = torch.full((16,), 6, dtype=torch.int32)
-    prepare_budgets(actual_history, actual, previous, metadata, positions, 64, 6, 6)
+    prepare_budgets(
+        actual_history, actual, previous, metadata, positions, 64, 6, 6, contiguous_positions=contiguous_positions
+    )
     assert actual.tolist() == [5, 3, 4, 5, 3, 6, 5, 4, 3, 6, 4, 5, 6, 6, 6, 6]
     assert torch.equal(actual_history[1, 5:11], previous[1])
     assert actual_history[2, 0].item() == 6
 
 
-def test_real_metadata_kernel_spans_multiple_tiles_without_previous_drafts():
+@pytest.mark.parametrize("contiguous_positions", [False, True])
+def test_real_metadata_kernel_spans_multiple_tiles_without_previous_drafts(contiguous_positions):
     history = torch.full((1, 512), 6, dtype=torch.int32)
     history[0, 200:400] = 3
     output = torch.full((512,), 6, dtype=torch.int32)
     metadata = torch.tensor([[0, -1, 0, 0, 400, 100]], dtype=torch.int32)
     positions = torch.arange(400, dtype=torch.int32)
-    prepare_budgets(history, output, None, metadata, positions, 512, 400, 6)
+    prepare_budgets(history, output, None, metadata, positions, 512, 400, 6, contiguous_positions=contiguous_positions)
     assert torch.all(output[:200] == 6)
     assert torch.all(output[200:400] == 3)
     assert torch.all(output[400:] == 6)
 
 
-def test_real_budget_kernel_counts_consumed_budgets_excluding_prompt_and_padding():
+@pytest.mark.parametrize("contiguous_positions", [False, True])
+def test_real_budget_kernel_counts_consumed_budgets_excluding_prompt_and_padding(contiguous_positions):
     history = torch.full((2, 512), 6, dtype=torch.int32)
     history[0, 200:400] = 3
     previous = torch.tensor([[3] * 7 + [6]], dtype=torch.int32)
@@ -114,10 +119,32 @@ def test_real_budget_kernel_counts_consumed_budgets_excluding_prompt_and_padding
     positions = torch.cat((torch.arange(400), torch.arange(8)))
     output = torch.full((512,), 6, dtype=torch.int32)
     histogram = torch.zeros(7, dtype=torch.int32)
-    prepare_budgets(history, output, previous, metadata, positions, 512, 400, 6, histogram)
+    prepare_budgets(
+        history,
+        output,
+        previous,
+        metadata,
+        positions,
+        512,
+        400,
+        6,
+        histogram,
+        contiguous_positions=contiguous_positions,
+    )
     assert histogram.tolist() == [0, 0, 0, 205, 0, 0, 101]
     # A second execution is real verification work even if positions repeat.
-    prepare_budgets(history, output, previous, metadata, positions, 512, 400, 6, histogram)
+    prepare_budgets(
+        history,
+        output,
+        previous,
+        metadata,
+        positions,
+        512,
+        400,
+        6,
+        histogram,
+        contiguous_positions=contiguous_positions,
+    )
     assert histogram.tolist() == [0, 0, 0, 410, 0, 0, 202]
 
 

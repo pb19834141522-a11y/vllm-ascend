@@ -1,0 +1,21 @@
+{
+  "main_thread_device_synchronize_count": 1,
+  "events": [
+    {
+      "name": "AscendCL@aclrtSynchronizeDeviceWithTimeout",
+      "pid": 1701823743,
+      "tid": 1661937,
+      "ts": "1792720193299062.040",
+      "dur": 73446.69,
+      "ph": "X",
+      "args": {
+        "Thread Id": 1661937,
+        "Mode": "ACL_RTS",
+        "level": "acl",
+        "id": "aclrtSynchronizeDeviceWithTimeout",
+        "item_id": "0",
+        "connection_id": 66335
+      }
+    }
+  ]
+}

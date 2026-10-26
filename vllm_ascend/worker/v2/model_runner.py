@@ -303,6 +303,9 @@ class NPUModelRunner(GPUModelRunner):
             partial(CpuGpuBuffer, device=self.device, pin_memory=False),
             log_stats_interval=config.log_stats_interval if get_tensor_model_parallel_rank() == 0 else 0,
             dp_rank=self.dp_rank,
+            # _prepare_inputs_impl builds an arange per request before any SP
+            # split. Preserve this fact in the budget kernel's History access.
+            contiguous_positions=True,
         )
         self.speculator.spec_k_target = self._spec_k_state
 

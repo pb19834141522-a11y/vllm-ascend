@@ -1,0 +1,109 @@
+{
+  "definition": "Actual target verification input-token budget; padding/prefill excluded, final Top-6 position included; not accepted tokens only or rank-local expert counts.",
+  "e2e384": {
+    "tokens": 712728,
+    "top_k_sum": 2437350,
+    "avg_top_k": 3.419747785971647,
+    "histogram": {
+      "1": 0,
+      "2": 0,
+      "3": 613006,
+      "4": 0,
+      "5": 0,
+      "6": 99722
+    }
+  },
+  "e2e384_session": 3,
+  "profile": {
+    "tokens": 7680,
+    "top_k_sum": 26058,
+    "avg_top_k": 3.39296875,
+    "histogram": {
+      "1": 0,
+      "2": 0,
+      "3": 6674,
+      "4": 0,
+      "5": 0,
+      "6": 1006
+    }
+  },
+  "profile_session": 5,
+  "profile_id": 1,
+  "all_final_sessions": [
+    {
+      "session": 1,
+      "scope": "workload",
+      "tokens": 48,
+      "top_k_sum": 162,
+      "avg_top_k": 3.375,
+      "histogram": {
+        "1": 0,
+        "2": 0,
+        "3": 42,
+        "4": 0,
+        "5": 0,
+        "6": 6
+      }
+    },
+    {
+      "session": 2,
+      "scope": "workload",
+      "tokens": 1480,
+      "top_k_sum": 5037,
+      "avg_top_k": 3.4033783783783784,
+      "histogram": {
+        "1": 0,
+        "2": 0,
+        "3": 1281,
+        "4": 0,
+        "5": 0,
+        "6": 199
+      }
+    },
+    {
+      "session": 3,
+      "scope": "workload",
+      "tokens": 712728,
+      "top_k_sum": 2437350,
+      "avg_top_k": 3.419747785971647,
+      "histogram": {
+        "1": 0,
+        "2": 0,
+        "3": 613006,
+        "4": 0,
+        "5": 0,
+        "6": 99722
+      }
+    },
+    {
+      "session": 4,
+      "scope": "workload",
+      "tokens": 1312,
+      "top_k_sum": 4572,
+      "avg_top_k": 3.4847560975609757,
+      "histogram": {
+        "1": 0,
+        "2": 0,
+        "3": 1100,
+        "4": 0,
+        "5": 0,
+        "6": 212
+      }
+    },
+    {
+      "session": 5,
+      "scope": "workload",
+      "tokens": 59640,
+      "top_k_sum": 203889,
+      "avg_top_k": 3.418661971830986,
+      "histogram": {
+        "1": 0,
+        "2": 0,
+        "3": 51317,
+        "4": 0,
+        "5": 0,
+        "6": 8323
+      }
+    }
+  ]
+}

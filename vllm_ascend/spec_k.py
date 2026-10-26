@@ -164,6 +164,10 @@ class SpecKBudgetState:
     Recording rejected rows is safe: the next verification overwrites them;
     historical recompute only addresses committed positions. Slots survive
     preemption and grow outside target graphs when necessary.
+
+    ``contiguous_positions`` is only valid when each request's positions are
+    consecutive, as guaranteed by V2 input preparation. Other callers retain
+    the generic position-gather path.
     """
 
     def __init__(
@@ -175,9 +179,11 @@ class SpecKBudgetState:
         make_buffer: Callable,
         log_stats_interval: int = 0,
         dp_rank: int = 0,
+        contiguous_positions: bool = False,
     ):
         self.policy = policy
         self.max_model_len = max_model_len
+        self.contiguous_positions = contiguous_positions
         device = policy.log_thresholds.device
         if device.type == "npu":
             try:
@@ -295,6 +301,7 @@ class SpecKBudgetState:
                 int(max(counts)),
                 self.policy.base_top_k,
                 histogram=self.stats.histogram if self.stats is not None else None,
+                contiguous_positions=self.contiguous_positions,
             )
         else:
             self._prepare_cpu(result, positions, len(req_ids))
